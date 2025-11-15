@@ -7,6 +7,7 @@ import { SettingsPanel } from "@/components/SettingsPanel";
 import { NoChatEmptyState } from "@/components/EmptyState";
 import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
+import { UserHistoryModal } from "@/components/UserHistoryModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
@@ -41,6 +42,7 @@ import {
 import { isOllamaAvailable, generateWithOllama, generateTextWithOllama } from "@/lib/localAI";
 import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
+import { staggeredLikes } from "@/lib/staggeredLikes";
 import { userPool, ChatUser } from "@/lib/userPool";
 
 const DEFAULT_SETTINGS: ChatSettings = {
@@ -94,6 +96,7 @@ const Index = () => {
   const [showUserList, setShowUserList] = useState(false);
   const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
+  const [showUserHistory, setShowUserHistory] = useState(false);
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
 
   // Refs
@@ -171,7 +174,7 @@ const Index = () => {
       setViewerCount(count);
     });
 
-    // Start retroactive likes system
+    // Start retroactive likes system (for older messages)
     retroactiveLikes.start((messageId, likes, likedBy) => {
       setMessages((current) =>
         current.map((msg) =>
@@ -182,11 +185,31 @@ const Index = () => {
       );
     });
 
+    // Start staggered likes system (for new messages)
+    staggeredLikes.start((messageId, username) => {
+      setMessages((current) =>
+        current.map((msg) => {
+          if (msg.id === messageId) {
+            const currentLikedBy = msg.likedBy || [];
+            if (!currentLikedBy.includes(username)) {
+              return {
+                ...msg,
+                likes: (msg.likes ?? 0) + 1,
+                likedBy: [...currentLikedBy, username]
+              };
+            }
+          }
+          return msg;
+        })
+      );
+    });
+
     console.log('🎬 User simulation started');
 
     return () => {
       userLifecycle.stop();
       retroactiveLikes.stop();
+      staggeredLikes.stop();
       console.log('🛑 User simulation stopped');
     };
   }, []);
@@ -238,6 +261,8 @@ const Index = () => {
   // Callbacks for chat sync
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
+    // Schedule staggered likes for this new message
+    staggeredLikes.schedulelikesForMessage(message);
   }, []);
 
   const handleClearMessages = useCallback(() => {
@@ -360,6 +385,7 @@ const Index = () => {
         
         setMessages((prev) => [...prev, endMessage]);
         broadcastMessage(endMessage);
+        staggeredLikes.schedulelikesForMessage(endMessage);
         
         stopStreaming();
         toast.info("Screen sharing stopped");
@@ -420,19 +446,8 @@ const Index = () => {
     setMessages((prev) => {
       const updated = [...prev, newMessage];
 
-      // AI liking: Check if this message should get likes
-      if (shouldAILikeMessage(newMessage)) {
-        setTimeout(() => {
-          const { likes, likedBy } = generateAILikes(newMessage);
-          setMessages((current) =>
-            current.map((msg) =>
-              msg.id === newMessage.id
-                ? { ...msg, likes, likedBy }
-                : msg
-            )
-          );
-        }, 300 + Math.random() * 700); // Random delay 0.3-1 second for ASMR flow
-      }
+      // Schedule staggered likes for this new message
+      staggeredLikes.schedulelikesForMessage(newMessage);
 
       // Check if this message should trigger a copypasta chain
       if (shouldTriggerCopypasta(message)) {
@@ -461,6 +476,8 @@ const Index = () => {
               };
               setMessages((prev) => [...prev, chainMessage]);
               broadcastMessage(chainMessage);
+              // Schedule likes for chain message
+              staggeredLikes.schedulelikesForMessage(chainMessage);
             }, idx * 800); // Stagger chain messages
           });
         }, 500);
@@ -896,6 +913,22 @@ Rules:
     }
   }, []);
 
+  const handleViewHistory = useCallback((username: string) => {
+    const user = userPool.getUserByUsername(username);
+    if (user) {
+      setSelectedUser(user);
+      setShowUserHistory(true);
+    }
+  }, []);
+
+  const handleViewProfile = useCallback((username: string) => {
+    const user = userPool.getUserByUsername(username);
+    if (user) {
+      setSelectedUser(user);
+      setShowUserProfile(true);
+    }
+  }, []);
+
   // Send moderator message
   const sendModeratorMessage = (text: string) => {
     if (!text.trim()) return;
@@ -922,6 +955,8 @@ Rules:
     startTransition(() => {
       setMessages((prev) => [...prev, newMessage]);
       broadcastMessage(newMessage);
+      // Schedule staggered likes for moderator message
+      staggeredLikes.schedulelikesForMessage(newMessage);
       clearReply(); // Clear reply context after sending
     });
   };
@@ -1103,6 +1138,8 @@ Rules:
                     }}
                     onReply={handleReply}
                     onJumpToMessage={handleJumpToMessage}
+                    onViewHistory={handleViewHistory}
+                    onViewProfile={handleViewProfile}
                   />
                 </div>
               ))
@@ -1144,6 +1181,17 @@ Rules:
         isOpen={showUserProfile}
         onClose={() => {
           setShowUserProfile(false);
+          setSelectedUser(null);
+        }}
+      />
+
+      {/* User History Modal */}
+      <UserHistoryModal
+        user={selectedUser}
+        messages={messages}
+        isOpen={showUserHistory}
+        onClose={() => {
+          setShowUserHistory(false);
           setSelectedUser(null);
         }}
       />

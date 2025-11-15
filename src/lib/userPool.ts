@@ -1,9 +1,10 @@
 import { PersonalityType } from "@/types/personality";
-import { 
-  generateUserBadges, 
-  generateAvatar, 
-  generateProfileColor, 
-  generateBio, 
+import { UserModerationState } from "@/types/moderation";
+import {
+  generateUserBadges,
+  generateAvatar,
+  generateProfileColor,
+  generateBio,
   generateFavoriteTeam,
   generateSubscriberMonths,
   generateBits
@@ -30,6 +31,8 @@ export interface ChatUser {
   favoriteTeam?: string;
   profileColor: string;
   createdAt: number;
+  // Moderation State
+  moderation: UserModerationState;
 }
 
 // Twitch-style username generators
@@ -157,7 +160,14 @@ class UserPool {
           bio: generateBio(personality),
           favoriteTeam: Math.random() < 0.7 ? generateFavoriteTeam() : undefined,
           profileColor: generateProfileColor(personality),
-          createdAt
+          createdAt,
+          // Moderation State
+          moderation: {
+            isBanned: false,
+            isTimedOut: false,
+            warnings: 0,
+            modActions: []
+          }
         };
         
         this.users.set(user.id, user);
@@ -326,6 +336,13 @@ class UserPool {
    */
   getAllUsers(): ChatUser[] {
     return Array.from(this.users.values());
+  }
+
+  /**
+   * Get all active users (lurking or active state)
+   */
+  getActiveUsers(): ChatUser[] {
+    return [...this.getUsersByState('active'), ...this.getUsersByState('lurking')];
   }
 }
 
