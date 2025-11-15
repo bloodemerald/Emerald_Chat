@@ -1,6 +1,8 @@
-# Screen Chatter AI
+# Emerald Chat - AI Twitch Simulator
 
 A Twitch-style chat simulator that generates AI-powered chat messages based on your screen content. Perfect for streamers, content creators, and developers who want to add interactive chat overlays.
+
+**🖥️ Now available as a native desktop app!** See [DESKTOP_APP.md](./DESKTOP_APP.md) for installation instructions.
 
 ## Features
 
@@ -16,8 +18,9 @@ A Twitch-style chat simulator that generates AI-powered chat messages based on y
 ## Technologies
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn-ui
+- **Desktop**: Tauri (Rust backend, native performance)
 - **Backend**: Supabase Edge Functions (Deno)
-- **AI**: Google Gemini 2.0 Flash (with vision support)
+- **AI**: Google Gemini 2.0 Flash (with vision support) + Local Ollama support
 
 ## Setup Instructions
 

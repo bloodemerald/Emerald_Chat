@@ -51,7 +51,7 @@ export class PollVotingManager {
 
     activeUsers.forEach(user => {
       // Determine if this user will vote
-      const voteProb ability = this.getVoteProbability(user.personality);
+      const voteProbability = this.getVoteProbability(user.personality);
       if (Math.random() > voteProbability) return; // Skip this user
 
       // Choose which option to vote for
@@ -128,21 +128,23 @@ export class PollVotingManager {
     if (options.length === 0) return null;
 
     switch (personality) {
-      case 'toxic':
+      case 'toxic': {
         // Contrarian - pick the least popular option (or random if none voted yet)
         const leastPopular = options.reduce((prev, current) =>
           current.votes < prev.votes ? current : prev
         );
         return leastPopular.votes === 0 ? this.randomOption(options) : leastPopular;
+      }
 
-      case 'hype':
+      case 'hype': {
         // Bandwagon - pick the most popular option (or first if none voted yet)
         const mostPopular = options.reduce((prev, current) =>
           current.votes > prev.votes ? current : prev
         );
         return mostPopular.votes === 0 ? options[0] : mostPopular;
+      }
 
-      case 'analyst':
+      case 'analyst': {
         // Logical - prefer options with specific keywords
         const logicalOptions = options.filter(opt =>
           /optimal|best|efficient|smart|logical|correct|right/i.test(opt.text)
@@ -150,8 +152,9 @@ export class PollVotingManager {
         return logicalOptions.length > 0
           ? this.randomOption(logicalOptions)
           : this.randomOption(options);
+      }
 
-      case 'meme':
+      case 'meme': {
         // Funny - prefer humorous or extreme options
         const funnyOptions = options.filter(opt =>
           /lol|meme|dank|based|chad|pog|kek/i.test(opt.text.toLowerCase()) ||
@@ -161,8 +164,9 @@ export class PollVotingManager {
         return funnyOptions.length > 0
           ? this.randomOption(funnyOptions)
           : this.randomOption(options);
+      }
 
-      case 'wholesome':
+      case 'wholesome': {
         // Positive - prefer positive/wholesome options
         const positiveOptions = options.filter(opt =>
           /yes|love|amazing|great|good|wholesome|nice|kind/i.test(opt.text)
@@ -170,6 +174,7 @@ export class PollVotingManager {
         return positiveOptions.length > 0
           ? this.randomOption(positiveOptions)
           : this.randomOption(options);
+      }
 
       case 'helpful':
         // Balanced - tend toward middle or "maybe" options
@@ -234,7 +239,7 @@ export class PollVotingManager {
       case 'hype':
         votingWindow = [0, 0.2]; // Vote immediately (0-20% of duration)
         break;
-      case 'spam mer':
+      case 'spammer':
         votingWindow = [0, 0.3]; // Vote early (0-30%)
         break;
       case 'analyst':
