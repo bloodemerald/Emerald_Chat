@@ -340,11 +340,12 @@ const Index = () => {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           // Don't specify displaySurface - let user choose monitor, window, or tab
-          cursor: "never", // Don't include cursor in capture
+          cursor: "never" as const, // Don't include cursor in capture
         },
         audio: false, // Don't capture audio
+        // @ts-expect-error preferCurrentTab is a Chrome-specific extension
         preferCurrentTab: false, // Don't default to current tab
-      } as any);
+      });
 
       // Store the stream for continuous captures
       setMediaStream(stream);
@@ -615,8 +616,8 @@ Rules:
 
         const shouldBurst = shouldCreateReactionChain(messages);
 
-        let data: any;
-        let error: any;
+        let data: { messages: Array<{ message: string; personality: PersonalityType }> } | undefined;
+        let error: Error | null = null;
         let usedLocal = false;
 
         const useLocal = settings.aiProvider === 'local' || settings.aiProvider === 'auto';
@@ -644,17 +645,18 @@ Rules:
                   batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
                 }),
                 timeoutPromise
-              ]) as any;
-              
+              ]) as { messages: Array<{ message: string; personality: PersonalityType }> };
+
               usedLocal = true;
               console.log("✅ Using Local Ollama (FREE!)");
-            } catch (ollamaError: any) {
+            } catch (ollamaError) {
               console.error("❌ Local Ollama failed:", ollamaError);
-              
+
               // For local-only mode, provide helpful guidance
               if (settings.aiProvider === 'local') {
-                toast.error("Local Ollama failed", { 
-                  description: ollamaError.message.includes('timeout') 
+                const errorMessage = ollamaError instanceof Error ? ollamaError.message : String(ollamaError);
+                toast.error("Local Ollama failed", {
+                  description: errorMessage.includes('timeout') 
                     ? "Model is too slow. Try: 1) Use llava:7b instead of llava:13b, 2) Use llama3.2:3b for text-only, or 3) Check Ollama is running"
                     : "Check your Ollama setup and model.",
                   duration: 12000
@@ -710,11 +712,13 @@ Rules:
           isWaitingForAIRef.current = false;
         }
       });
-    } catch (error: any) {
+    } catch (error) {
       isWaitingForAIRef.current = false;
       console.error("Error generating message batch:", error);
-      const errorStatus = error?.status || error?.context?.status;
-      console.error("Error details:", { status: errorStatus, message: error?.message, contextStatus: error?.context?.status, name: error?.name });
+      const errorStatus = (error as { status?: number; context?: { status?: number } })?.status || (error as { context?: { status?: number } })?.context?.status;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : 'Unknown';
+      console.error("Error details:", { status: errorStatus, message: errorMessage, contextStatus: (error as { context?: { status?: number } })?.context?.status, name: errorName });
 
       if (errorStatus === 429) {
         toast.error("AI rate limit exceeded", { description: "Trying alternative models automatically. If this persists, wait a minute.", duration: 10000 });

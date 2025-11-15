@@ -102,9 +102,10 @@ export const ModeratorControls: React.FC<ModeratorControlsProps> = ({
     switch (confirmDialog.type) {
       case 'ban':
         return 'This user will be permanently banned and removed from chat.';
-      case 'timeout':
+      case 'timeout': {
         const duration = confirmDialog.duration;
         return `This user will be timed out for ${duration} and temporarily removed from chat.`;
+      }
       case 'warn':
         return 'This user will receive a warning. Multiple warnings may result in automatic timeout.';
       default:
