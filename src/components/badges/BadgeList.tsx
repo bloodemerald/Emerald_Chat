@@ -13,16 +13,16 @@ interface BadgeListProps {
  * Displays a horizontal list of user badges
  * Used in chat messages and user profiles
  */
-export const BadgeList = memo(({ 
-  badges, 
-  size = 'sm', 
+export const BadgeList = memo(({
+  badges,
+  size = 'sm',
   maxDisplay = 5,
-  showTooltip = true 
+  showTooltip = true
 }: BadgeListProps) => {
-  if (!badges || badges.length === 0) return null;
-
   // Memoize sorted badges to prevent re-sorting on every render
   const sortedBadges = useMemo(() => {
+    if (!badges || badges.length === 0) return [];
+
     const rarityOrder = { legendary: 0, epic: 1, rare: 2, common: 3 };
     const typeOrder = { 
       moderator: 0, 
@@ -47,6 +47,9 @@ export const BadgeList = memo(({
       return typeA - typeB;
     });
   }, [badges]);
+
+  // Return early if no badges
+  if (sortedBadges.length === 0) return null;
 
   const displayBadges = sortedBadges.slice(0, maxDisplay);
   const remainingCount = badges.length - maxDisplay;

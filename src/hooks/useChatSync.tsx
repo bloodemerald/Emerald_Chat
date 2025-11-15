@@ -32,7 +32,7 @@ export function useChatSync(
 
       // Handle connection errors
       channel.onerror = (error) => {
-        // eslint-disable-next-line no-console
+         
         console.error('BroadcastChannel error:', error);
         isConnectedRef.current = false;
 
@@ -41,7 +41,7 @@ export function useChatSync(
           clearTimeout(reconnectTimeoutRef.current);
         }
         reconnectTimeoutRef.current = setTimeout(() => {
-          // eslint-disable-next-line no-console
+           
           console.log('Attempting to reconnect BroadcastChannel...');
           setupChannel();
         }, 2000);
@@ -93,7 +93,7 @@ export function useChatSync(
 
       return channel;
     } catch (error) {
-      // eslint-disable-next-line no-console
+       
       console.error('Failed to create BroadcastChannel:', error);
       isConnectedRef.current = false;
 
