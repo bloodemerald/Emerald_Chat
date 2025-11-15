@@ -1,0 +1,75 @@
+export type PersonalityType = 
+  | "toxic"
+  | "helpful"
+  | "meme"
+  | "backseat"
+  | "hype"
+  | "lurker"
+  | "spammer"
+  | "analyst"
+  | "speedrunner"
+  | "emote_spammer"
+  | "clip_goblin"
+  | "spoiler_police"
+  | "wholesome"
+  | "theorycrafter"
+  | "reaction_only"
+  | "mobile_only";
+
+export type MessageType = 
+  | "reaction"
+  | "question"
+  | "command"
+  | "copypasta"
+  | "emote"
+  | "reply"
+  | "prediction"
+  | "normal";
+
+export interface Personality {
+  type: PersonalityType;
+  name: string;
+  color: string;
+  emoji: string;
+  weight: number;
+  messageTypes: { type: MessageType; weight: number }[];
+  signaturePhrases: string[];
+  emotes: string[];
+}
+
+export interface Message {
+  id: string;
+  username: string;
+  color: string;
+  message: string;
+  timestamp: string;
+  isModerator?: boolean;
+  personality?: PersonalityType;
+  likes?: number;
+  dislikes?: number;
+  likedBy?: string[];
+  // Reply/Threading
+  replyToId?: string;
+  replyToUsername?: string;
+  replyToMessage?: string;
+  threadCount?: number;
+  // Badges
+  badges?: import('./badges').UserBadge[];
+  // User metadata
+  subscriberMonths?: number;
+  bits?: number;
+}
+
+export interface ChatSettings {
+  personalities: Record<PersonalityType, boolean>;
+  messageFrequency: number;
+  diversityLevel: "low" | "medium" | "high";
+  // AI Provider Selection
+  aiProvider: "local" | "cloud" | "auto";
+  ollamaModel?: string;
+  ollamaApiUrl?: string;
+  // Useful Twitch-inspired features
+  pauseOnScroll: boolean;
+  showTimestamps: boolean;
+  enableAutoMod: boolean;
+}

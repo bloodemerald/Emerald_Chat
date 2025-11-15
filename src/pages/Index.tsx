@@ -1,0 +1,1154 @@
+ // Force reload
+import { useState, useEffect, useRef, useCallback, useMemo, startTransition } from "react";
+import { ChatPersonality } from "@/components/ChatPersonality";
+import { ChatHeader } from "@/components/ChatHeader";
+import { ChatInput } from "@/components/ChatInput";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import { NoChatEmptyState } from "@/components/EmptyState";
+import { UserListPanel } from "@/components/UserListPanel";
+import { UserProfileModal } from "@/components/UserProfileModal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Message, ChatSettings, PersonalityType } from "@/types/personality";
+import { selectPersonality, PERSONALITIES } from "@/lib/personalities";
+import { useChatSync } from "@/hooks/useChatSync";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { compressScreenshot } from "@/lib/imageUtils";
+import { saveMessages, loadMessages, clearMessages, saveSettings, loadSettings } from "@/lib/storage";
+import { RateLimiter } from "@/lib/debounce";
+import {
+  MESSAGE_FREQUENCY_DEFAULT,
+  RECENT_MESSAGES_LIMIT,
+  MODERATOR_COLOR,
+  POPOUT_WIDTH,
+  POPOUT_HEIGHT,
+  POPOUT_WINDOW_NAME,
+  ERROR_MESSAGES,
+  SUCCESS_MESSAGES,
+  API_RATE_LIMIT_DELAY,
+  AI_BATCH_SIZE,
+} from "@/lib/constants";
+import {
+  getOrCreateChatUser,
+  shouldTriggerCopypasta,
+  generateCopypastaChain,
+  calculateMessageDelay,
+  shouldAddLurkerJoin,
+  shouldCreateReactionChain,
+  shouldAILikeMessage,
+  generateAILikes,
+} from "@/lib/chatFlow";
+import { isOllamaAvailable, generateWithOllama, generateTextWithOllama } from "@/lib/localAI";
+import { userLifecycle } from "@/lib/userLifecycle";
+import { retroactiveLikes } from "@/lib/retroactiveLikes";
+import { userPool, ChatUser } from "@/lib/userPool";
+
+const DEFAULT_SETTINGS: ChatSettings = {
+  personalities: {
+    toxic: true,
+    helpful: true,
+    meme: true,
+    backseat: true,
+    hype: true,
+    lurker: true,
+    spammer: true,
+    analyst: true,
+    speedrunner: true,
+    emote_spammer: true,
+    clip_goblin: true,
+    spoiler_police: true,
+    wholesome: true,
+    theorycrafter: true,
+    reaction_only: true,
+    mobile_only: true,
+  },
+  messageFrequency: MESSAGE_FREQUENCY_DEFAULT,
+  diversityLevel: "high",
+  aiProvider: "local", // Force local-only mode
+  ollamaModel: "llava:7b", // Balanced speed and quality for RTX 3070
+  // Useful Twitch-inspired features
+  pauseOnScroll: true,
+  showTimestamps: true,
+  enableAutoMod: false,
+};
+
+const Index = () => {
+  // State
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [screenshot, setScreenshot] = useState<string | null>(null);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
+  const captureIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
+  const [showSettings, setShowSettings] = useState(false);
+  const [isPopoutOpen, setIsPopoutOpen] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [viewerCount, setViewerCount] = useState(0);
+  const [replyingTo, setReplyingTo] = useState<{
+    messageId: string;
+    username: string;
+    message: string;
+  } | null>(null);
+  const [showUserList, setShowUserList] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<ChatUser | null>(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
+  const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
+
+  // Refs
+  const chatBoxRef = useRef<HTMLDivElement>(null);
+  const settingsPanelRef = useRef<HTMLDivElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const popoutWindowRef = useRef<Window | null>(null);
+  const rateLimiterRef = useRef(new RateLimiter(API_RATE_LIMIT_DELAY));
+  const messageQueueRef = useRef<Array<{ message: string; personality: PersonalityType }>>([]);
+  const retryCountRef = useRef(0);
+  const isWaitingForAIRef = useRef(false);
+
+  // Load saved data on mount
+  useEffect(() => {
+    const savedMessages = loadMessages();
+    const savedSettings = loadSettings();
+
+    if (savedMessages.length > 0) {
+      setMessages(savedMessages);
+    }
+
+    if (savedSettings) {
+      // Migrate old settings to include new personality types
+      const migratedSettings = {
+        ...DEFAULT_SETTINGS,
+        ...savedSettings,
+        personalities: {
+          ...DEFAULT_SETTINGS.personalities,
+          ...savedSettings.personalities,
+        },
+      };
+      setSettings(migratedSettings);
+      // Save migrated settings
+      saveSettings(migratedSettings);
+    }
+  }, []);
+
+  // Close settings when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        showSettings &&
+        settingsPanelRef.current &&
+        !settingsPanelRef.current.contains(event.target as Node)
+      ) {
+        setShowSettings(false);
+      }
+    };
+
+    if (showSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSettings]);
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveMessages(messages);
+    }
+  }, [messages]);
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
+  // Initialize user lifecycle and retroactive likes
+  useEffect(() => {
+    // Start user lifecycle (users joining/leaving)
+    userLifecycle.start((count) => {
+      setViewerCount(count);
+    });
+
+    // Start retroactive likes system
+    retroactiveLikes.start((messageId, likes, likedBy) => {
+      setMessages((current) =>
+        current.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, likes, likedBy }
+            : msg
+        )
+      );
+    });
+
+    console.log('🎬 User simulation started');
+
+    return () => {
+      userLifecycle.stop();
+      retroactiveLikes.stop();
+      console.log('🛑 User simulation stopped');
+    };
+  }, []);
+
+  // Sync users from user pool
+  useEffect(() => {
+    const syncUsers = () => {
+      const users = userPool.getAllUsers();
+      const activeUsers = users.filter(u => u.state === 'lurking' || u.state === 'active');
+      console.log(`👥 User sync: ${users.length} total, ${activeUsers.length} active viewers`);
+      
+      // Only update if users actually changed to prevent unnecessary re-renders
+      setAllUsers(prevUsers => {
+        if (prevUsers.length !== users.length) return users;
+        
+        // Check if any user state changed
+        const hasChanges = users.some((user, index) => {
+          const prevUser = prevUsers[index];
+          return !prevUser || 
+            prevUser.state !== user.state || 
+            prevUser.messageCount !== user.messageCount ||
+            prevUser.lastActivityTime !== user.lastActivityTime;
+        });
+        
+        return hasChanges ? users : prevUsers;
+      });
+    };
+
+    // Initial sync
+    syncUsers();
+
+    // Sync every 5 seconds (reduced frequency) to keep user list updated
+    const interval = setInterval(syncUsers, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Process messages for retroactive likes
+  useEffect(() => {
+    if (messages.length > 0) {
+      retroactiveLikes.processMessages(messages);
+    }
+  }, [messages]);
+
+  const handleSettingsChange = (newSettings: ChatSettings) => {
+    setSettings(newSettings);
+  };
+  
+  // Callbacks for chat sync
+  const handleNewMessage = useCallback((message: Message) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
+
+  const handleClearMessages = useCallback(() => {
+    setMessages([]);
+    clearMessages();
+    toast.success(SUCCESS_MESSAGES.MESSAGES_CLEARED);
+  }, []);
+
+  const { broadcastMessage, broadcastClear } = useChatSync(
+    messages,
+    handleNewMessage,
+    handleClearMessages
+  );
+
+  // Limit messages to prevent memory issues
+  useEffect(() => {
+    if (messages.length > RECENT_MESSAGES_LIMIT) {
+      setMessages(prev => prev.slice(-RECENT_MESSAGES_LIMIT));
+    }
+  }, [messages.length]);
+
+  // Handle pause on scroll functionality
+  useEffect(() => {
+    const chatBox = chatBoxRef.current;
+    if (!chatBox || !settings.pauseOnScroll) return;
+
+    const handleScroll = () => {
+      const isScrolledToBottom =
+        chatBox.scrollHeight - chatBox.scrollTop <= chatBox.clientHeight + 50;
+
+      setIsPaused(!isScrolledToBottom);
+    };
+
+    chatBox.addEventListener('scroll', handleScroll);
+    return () => chatBox.removeEventListener('scroll', handleScroll);
+  }, [settings.pauseOnScroll]);
+
+  // Auto-scroll to bottom when new messages arrive (unless paused)
+  useEffect(() => {
+    if (chatBoxRef.current && !isPaused) {
+      chatBoxRef.current.scrollTop = chatBoxRef.current.scrollHeight;
+    }
+  }, [messages, isPaused]);
+
+  // Capture a single frame from the active stream
+  const captureFrameFromStream = useCallback(async (stream: MediaStream): Promise<string | null> => {
+    try {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.play();
+
+      await new Promise((resolve) => {
+        video.onloadedmetadata = resolve;
+      });
+
+      // Small delay to ensure frame is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const dataUrl = await compressScreenshot(video);
+      return dataUrl;
+    } catch (error) {
+      console.error("Frame capture error:", error);
+      return null;
+    }
+  }, []);
+
+  // Start screen capture stream (keeps stream alive for continuous captures)
+  const captureScreen = useCallback(async () => {
+    if (isCapturing) return null;
+
+    try {
+      setIsCapturing(true);
+
+      // Allow user to select specific window/app, not just whole screen
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          // Don't specify displaySurface - let user choose monitor, window, or tab
+          cursor: "never", // Don't include cursor in capture
+        },
+        audio: false, // Don't capture audio
+        preferCurrentTab: false, // Don't default to current tab
+      } as any);
+
+      // Store the stream for continuous captures
+      setMediaStream(stream);
+      mediaStreamRef.current = stream;
+
+      // Capture initial frame
+      const dataUrl = await captureFrameFromStream(stream);
+      if (dataUrl) {
+        setScreenshot(dataUrl);
+        toast.success("🎥 Screen streaming started!", {
+          description: "Chat can now see what you're streaming in real-time.",
+        });
+      }
+
+      // Monitor if user stops sharing
+      stream.getVideoTracks()[0].onended = async () => {
+        console.log("User stopped screen sharing");
+        
+        // Generate contextual message about stream ending
+        const message = await generateContextualMessage('stream_ended', 'lurker');
+        const lurkerUser = getOrCreateChatUser('lurker');
+        const endMessage: Message = {
+          id: `${Date.now()}-${Math.random()}`,
+          username: lurkerUser.username,
+          color: PERSONALITIES.lurker.color,
+          message,
+          timestamp: new Date().toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          personality: 'lurker',
+          likes: 0,
+          likedBy: [],
+          badges: lurkerUser.badges,
+          subscriberMonths: lurkerUser.subscriberMonths,
+          bits: lurkerUser.bits,
+        };
+        
+        setMessages((prev) => [...prev, endMessage]);
+        broadcastMessage(endMessage);
+        
+        stopStreaming();
+        toast.info("Screen sharing stopped");
+      };
+
+      return dataUrl;
+    } catch (error) {
+      console.error("Screen capture error:", error);
+      toast.error(ERROR_MESSAGES.SCREEN_CAPTURE_FAILED);
+      return null;
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [isCapturing, captureFrameFromStream]);
+
+  // Stop streaming and clean up
+  const stopStreaming = useCallback(() => {
+    const stream = mediaStreamRef.current || mediaStream;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    setMediaStream(null);
+    mediaStreamRef.current = null;
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+    setScreenshot(null);
+  }, [mediaStream]);
+
+  // Pop message from queue and display it with advanced features
+  const displayNextQueuedMessage = useCallback(() => {
+    if (messageQueueRef.current.length === 0) return;
+
+    const { message, personality } = messageQueueRef.current.shift()!;
+    const personalityData = PERSONALITIES[personality];
+
+    // Use persistent users from the user pool
+    const chatUser = getOrCreateChatUser(personality);
+
+    const newMessage: Message = {
+      id: `${Date.now()}-${Math.random()}`,
+      username: chatUser.username,
+      color: personalityData.color,
+      message,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      personality,
+      likes: 0,
+      likedBy: [],
+      badges: chatUser.badges,
+      subscriberMonths: chatUser.subscriberMonths,
+      bits: chatUser.bits,
+    };
+
+    setMessages((prev) => {
+      const updated = [...prev, newMessage];
+
+      // AI liking: Check if this message should get likes
+      if (shouldAILikeMessage(newMessage)) {
+        setTimeout(() => {
+          const { likes, likedBy } = generateAILikes(newMessage);
+          setMessages((current) =>
+            current.map((msg) =>
+              msg.id === newMessage.id
+                ? { ...msg, likes, likedBy }
+                : msg
+            )
+          );
+        }, 300 + Math.random() * 700); // Random delay 0.3-1 second for ASMR flow
+      }
+
+      // Check if this message should trigger a copypasta chain
+      if (shouldTriggerCopypasta(message)) {
+        const chainMessages = generateCopypastaChain(message, 2);
+        setTimeout(() => {
+          chainMessages.forEach((chainMsg, idx) => {
+            setTimeout(() => {
+              const chainUser = getOrCreateChatUser(
+                selectPersonality(settings.personalities)
+              );
+              const chainMessage: Message = {
+                id: `${Date.now()}-${Math.random()}-chain-${idx}`,
+                username: chainUser.username,
+                color: PERSONALITIES[chainUser.personality].color,
+                message: chainMsg,
+                timestamp: new Date().toLocaleTimeString("en-US", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+                personality: chainUser.personality,
+                likes: 0,
+                likedBy: [],
+                badges: chainUser.badges,
+                subscriberMonths: chainUser.subscriberMonths,
+                bits: chainUser.bits,
+              };
+              setMessages((prev) => [...prev, chainMessage]);
+              broadcastMessage(chainMessage);
+            }, idx * 800); // Stagger chain messages
+          });
+        }, 500);
+      }
+
+      return updated;
+    });
+
+    broadcastMessage(newMessage);
+  }, [broadcastMessage, settings.personalities]);
+
+  // Test messages removed - using AI only
+
+  // Generate contextual message when screen issues occur
+  const generateContextualMessage = useCallback(async (context: 'no_screen' | 'stream_ended', personality: PersonalityType): Promise<string> => {
+    const examples = {
+      no_screen: [
+        "uhh stream is frozen??",
+        "yo i cant see anything",
+        "screen went black",
+        "is the stream down",
+        "refresh your stream",
+        "cant see the game",
+        "stream lagging hard",
+        "black screen lol",
+      ],
+      stream_ended: [
+        "stream ended??",
+        "wait it stopped",
+        "noooo come back",
+        "stream went offline",
+        "is that it??",
+        "bruh stream died",
+        "rip stream",
+      ]
+    };
+
+    try {
+      const useLocal = settings.aiProvider === 'local' || settings.aiProvider === 'auto';
+      
+      if (useLocal) {
+        const targetOllamaUrl = settings.ollamaApiUrl;
+        const ollamaAvailable = await isOllamaAvailable(targetOllamaUrl);
+        
+        if (ollamaAvailable) {
+          const prompt = `Generate ONE realistic Twitch chat message about ${context.replace('_', ' ')}. 
+
+Personality: ${personality}
+Style examples (do NOT copy exactly, create similar variations):
+${examples[context].map(ex => `- "${ex}"`).join('\n')}
+
+Rules:
+- Write as a ${personality} personality
+- Be casual, imperfect, like real Twitch chat
+- Use lowercase, typos are OK
+- Keep it short and authentic
+- Output ONLY the message, nothing else
+- Make it different from the examples but same style`;
+
+          const message = await generateTextWithOllama({
+            prompt: prompt,
+            model: settings.ollamaModel,
+            ollamaApiUrl: targetOllamaUrl,
+          });
+          
+          return message || examples[context][Math.floor(Math.random() * examples[context].length)];
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to generate contextual message, using fallback:", error);
+    }
+    
+    // Fallback to random selection if AI fails
+    return examples[context][Math.floor(Math.random() * examples[context].length)];
+  }, [settings.aiProvider, settings.ollamaApiUrl, settings.ollamaModel]);
+
+  // Generate batch of chat messages with rate limiting and retry logic
+  const generateChatMessageBatch = useCallback(async () => {
+    console.log("🎬 generateChatMessageBatch called", { hasScreenshot: !!screenshot, queueLength: messageQueueRef.current.length });
+    
+    if (!screenshot) {
+      console.log("⚠️ No screenshot available, generating contextual message");
+      // Generate contextual message about screen issues
+      const message = await generateContextualMessage('no_screen', 'helpful');
+      const helpfulUser = getOrCreateChatUser('helpful');
+      const newMessage: Message = {
+        id: `${Date.now()}-${Math.random()}`,
+        username: helpfulUser.username,
+        color: PERSONALITIES.helpful.color,
+        message,
+        timestamp: new Date().toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        personality: 'helpful',
+        likes: 0,
+        likedBy: [],
+        badges: helpfulUser.badges,
+        subscriberMonths: helpfulUser.subscriberMonths,
+        bits: helpfulUser.bits,
+      };
+      
+      console.log("💬 Adding no-screen message:", newMessage.message);
+      setMessages((prev) => [...prev, newMessage]);
+      broadcastMessage(newMessage);
+      return;
+    }
+
+    if (messageQueueRef.current.length > 0) {
+      console.log("📤 Displaying queued message");
+      displayNextQueuedMessage();
+      return;
+    }
+    
+    // Prevent multiple simultaneous AI calls
+    if (isWaitingForAIRef.current) {
+      console.log("⏳ Already waiting for AI response, skipping duplicate call");
+      return;
+    }
+
+    try {
+      isWaitingForAIRef.current = true;
+      await rateLimiterRef.current.execute(async () => {
+        const selectedPersonalities: PersonalityType[] = [];
+        for (let i = 0; i < AI_BATCH_SIZE; i++) {
+          const personality = selectPersonality(settings.personalities);
+          selectedPersonalities.push(personality);
+        }
+
+        const recentMessages = messages.slice(-RECENT_MESSAGES_LIMIT).map((m) => `${m.isModerator ? "[MODERATOR]" : ""} ${m.username}: ${m.message}`);
+
+        if (shouldAddLurkerJoin(messages.length)) {
+          selectedPersonalities[0] = 'lurker';
+        }
+
+        const shouldBurst = shouldCreateReactionChain(messages);
+
+        let data: any;
+        let error: any;
+        let usedLocal = false;
+
+        const useLocal = settings.aiProvider === 'local' || settings.aiProvider === 'auto';
+        const useCloud = settings.aiProvider === 'cloud' || settings.aiProvider === 'auto';
+
+        if (useLocal) {
+          const targetOllamaUrl = settings.ollamaApiUrl;
+          const ollamaAvailable = await isOllamaAvailable(targetOllamaUrl);
+          if (ollamaAvailable) {
+            try {
+              console.log("🤖 Attempting local Ollama generation...");
+              
+              // Add timeout to prevent infinite waiting (90s for llava:13b)
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Ollama timeout after 90s - model may be too slow or out of memory')), 90000)
+              );
+              
+              data = await Promise.race([
+                generateWithOllama({
+                  screenshot,
+                  recentChat: recentMessages,
+                  personalities: selectedPersonalities,
+                  model: settings.ollamaModel,
+                  ollamaApiUrl: targetOllamaUrl,
+                  batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
+                }),
+                timeoutPromise
+              ]) as any;
+              
+              usedLocal = true;
+              console.log("✅ Using Local Ollama (FREE!)");
+            } catch (ollamaError: any) {
+              console.error("❌ Local Ollama failed:", ollamaError);
+              
+              // For local-only mode, provide helpful guidance
+              if (settings.aiProvider === 'local') {
+                toast.error("Local Ollama failed", { 
+                  description: ollamaError.message.includes('timeout') 
+                    ? "Model is too slow. Try: 1) Use llava:7b instead of llava:13b, 2) Use llama3.2:3b for text-only, or 3) Check Ollama is running"
+                    : "Check your Ollama setup and model.",
+                  duration: 12000
+                });
+                stopGenerating();
+                return;
+              }
+              // If auto mode, fall through to cloud
+              console.log("⚠️ Falling back to cloud AI...");
+            }
+          } else if (settings.aiProvider === 'local') {
+            toast.error("Ollama is not running", {
+              description: targetOllamaUrl
+                ? `Cannot reach ${targetOllamaUrl}. Start Ollama with: ollama serve`
+                : "Start Ollama with 'ollama serve' then pull a vision model: 'ollama pull llava:7b'",
+              duration: 12000
+            });
+            stopGenerating();
+            return;
+          }
+        }
+
+        if (useCloud && !usedLocal) {
+          console.log("☁️ Using Cloud AI...");
+          try {
+            const geminiResponse = await supabase.functions.invoke("generate-chat-gemini", {
+              body: { screenshot, recentChat: recentMessages, personalities: selectedPersonalities, batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE },
+            });
+            data = geminiResponse.data;
+            error = geminiResponse.error;
+            if (!error) console.log("✅ Using Google Gemini API (Cloud)");
+          } catch (geminiError) {
+            console.warn("⚠️ Google Gemini failed, trying OpenRouter fallback:", geminiError);
+            const openRouterResponse = await supabase.functions.invoke("generate-chat", {
+              body: { screenshot, recentChat: recentMessages, personalities: selectedPersonalities, batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE },
+            });
+            data = openRouterResponse.data;
+            error = openRouterResponse.error;
+            if (!error) console.log("✅ Using OpenRouter fallback");
+          }
+        }
+
+        if (error) throw error;
+
+        if (data?.messages && Array.isArray(data.messages)) {
+          console.log(`✅ AI generated ${data.messages.length} messages`);
+          messageQueueRef.current.push(...data.messages);
+          retryCountRef.current = 0;
+          isWaitingForAIRef.current = false;
+          displayNextQueuedMessage();
+        } else {
+          console.warn("⚠️ No messages in AI response", data);
+          isWaitingForAIRef.current = false;
+        }
+      });
+    } catch (error: any) {
+      isWaitingForAIRef.current = false;
+      console.error("Error generating message batch:", error);
+      const errorStatus = error?.status || error?.context?.status;
+      console.error("Error details:", { status: errorStatus, message: error?.message, contextStatus: error?.context?.status, name: error?.name });
+
+      if (errorStatus === 429) {
+        toast.error("AI rate limit exceeded", { description: "Trying alternative models automatically. If this persists, wait a minute.", duration: 10000 });
+        retryCountRef.current = 0;
+        stopGenerating();
+        return;
+      } else if (errorStatus === 402) {
+        toast.error(ERROR_MESSAGES.AI_CREDITS_EXHAUSTED);
+        retryCountRef.current = 0;
+        stopGenerating();
+        return;
+      } else if (errorStatus === 403 || errorStatus === 401) {
+        toast.error("API authentication failed. Check your Google AI API key.", { duration: 10000 });
+        retryCountRef.current = 0;
+        stopGenerating();
+        return;
+      } else if (errorStatus === 500 || errorStatus === 503) {
+        console.error("Full error object:", error);
+        
+        // Check if we should retry or give up
+        if (retryCountRef.current < 2) {
+          retryCountRef.current++;
+          toast.warning(`AI service issue (attempt ${retryCountRef.current}/2)`, { 
+            description: "Retrying with different model...",
+            duration: 5000 
+          });
+          setTimeout(() => {
+            generateChatMessageBatch();
+          }, 2000);
+          return;
+        }
+        
+        // After retries, show helpful message
+        toast.error("AI service temporarily unavailable", { 
+          description: "All AI models are rate limited. Try: 1) Wait a minute, 2) Use local Ollama with llava:7b, or 3) Check your API keys.",
+          duration: 15000 
+        });
+        retryCountRef.current = 0;
+        stopGenerating();
+        return;
+      }
+
+      const maxRetries = 3;
+      if (retryCountRef.current < maxRetries) {
+        retryCountRef.current++;
+        const retryDelay = Math.min(1000 * Math.pow(2, retryCountRef.current), 10000);
+        toast.error(`Retry ${retryCountRef.current}/${maxRetries} in ${retryDelay / 1000}s...`);
+        setTimeout(() => {
+          generateChatMessageBatch();
+        }, retryDelay);
+        return;
+      }
+
+      retryCountRef.current = 0;
+      isWaitingForAIRef.current = false;
+      stopGenerating();
+      toast.error(ERROR_MESSAGES.AI_GENERATION_FAILED, { description: "Generation stopped after multiple failures. Check console for details.", duration: 10000 });
+    }
+  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage]);
+
+  // Start generating messages with dynamic timing
+  const startGenerating = async () => {
+    console.log("🚀 startGenerating called", { isGenerating, hasScreenshot: !!screenshot, hasMediaStream: !!mediaStream });
+    
+    // Force reset all state when manually starting (fix stuck states)
+    isWaitingForAIRef.current = false;
+    retryCountRef.current = 0;
+    messageQueueRef.current = [];
+    
+    if (isGenerating) {
+      console.log("⏭️ Already generating, forcing restart...");
+      // Force restart to fix stuck state
+      stopGenerating();
+      // Small delay before restart
+      setTimeout(() => {
+        setIsGenerating(true);
+        generateChatMessageBatch();
+      }, 100);
+      return;
+    }
+
+    // Auto-capture if no screenshot exists
+    if (!screenshot || !mediaStream) {
+      console.log("📸 No screenshot/stream, capturing...");
+      const captured = await captureScreen();
+      if (!captured) {
+        console.error("❌ Screen capture failed");
+        toast.error('Screen capture required to start AI chat');
+        return;
+      }
+    }
+
+    console.log("✅ Starting generation...");
+    setIsGenerating(true);
+    generateChatMessageBatch();
+
+    // Start continuous screen capture (every 5 seconds to keep context fresh)
+    // Store in a separate ref to avoid triggering the auto-start effect
+    const activeStream = mediaStreamRef.current;
+    if (activeStream) {
+      const latestScreenshotRef = { current: screenshot };
+      
+      captureIntervalRef.current = setInterval(async () => {
+        const frame = await captureFrameFromStream(activeStream);
+        if (frame) {
+          latestScreenshotRef.current = frame;
+          // Update screenshot state WITHOUT triggering auto-start
+          setScreenshot(frame);
+          console.log("📸 Screen refreshed for AI context");
+        } else {
+          // If frame capture fails, users should realistically comment
+          console.warn("⚠️ Failed to capture new frame");
+        }
+      }, 5000); // Capture new frame every 5 seconds
+    }
+
+    // Use dynamic timing instead of fixed interval
+    const scheduleNext = () => {
+      const dynamicDelay = calculateMessageDelay(settings.messageFrequency, messages);
+      console.log(`⏰ Scheduling next message in ${dynamicDelay}s`);
+      intervalRef.current = setTimeout(() => {
+        console.log("🚀 Triggering next message batch");
+        generateChatMessageBatch();
+        scheduleNext(); // Schedule next message with new timing
+      }, dynamicDelay * 1000);
+    };
+
+    scheduleNext();
+  };
+
+  // Stop generating messages
+  const stopGenerating = () => {
+    setIsGenerating(false);
+    if (intervalRef.current) {
+      clearTimeout(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (captureIntervalRef.current) {
+      clearInterval(captureIntervalRef.current);
+      captureIntervalRef.current = null;
+    }
+  };
+
+  // Handle Play/Stop button: capture screen then auto-start, or stop generation + clear capture
+  const handlePlayStop = async () => {
+    if (isGenerating) {
+      stopGenerating();
+      stopStreaming();
+      toast.info("🛑 Streaming stopped and capture cleared");
+    } else {
+      const dataUrl = await captureScreen();
+      if (dataUrl) {
+        toast.success("🎥 Screen captured! Starting generation...");
+      }
+    }
+  };
+
+  // Auto-start generation when screenshot is captured via Play button (ONLY on initial capture)
+  const hasStartedRef = useRef(false);
+  
+  useEffect(() => {
+    if (screenshot && !isGenerating && !isCapturing && !hasStartedRef.current) {
+      hasStartedRef.current = true;
+      // Small delay to ensure state is settled
+      const timer = setTimeout(() => {
+        startGenerating();
+      }, 300);
+
+      return () => clearTimeout(timer);
+    }
+    
+    // Reset flag when screenshot is cleared
+    if (!screenshot) {
+      hasStartedRef.current = false;
+    }
+  }, [screenshot, isGenerating, isCapturing]);
+
+  // Reply handlers
+  const handleReply = useCallback((messageId: string, username: string, message: string) => {
+    setReplyingTo({ messageId, username, message });
+  }, []);
+
+  const clearReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+
+  const handleJumpToMessage = useCallback((messageId: string) => {
+    const messageElement = document.getElementById(`message-${messageId}`);
+    if (messageElement && chatBoxRef.current) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight briefly
+      messageElement.classList.add('bg-purple-100');
+      setTimeout(() => {
+        messageElement.classList.remove('bg-purple-100');
+      }, 1500);
+    }
+  }, []);
+
+  // Send moderator message
+  const sendModeratorMessage = (text: string) => {
+    if (!text.trim()) return;
+
+    const newMessage: Message = {
+      id: `${Date.now()}-${Math.random()}`,
+      username: "MODERATOR",
+      color: MODERATOR_COLOR,
+      message: text,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isModerator: true,
+      likes: 0,
+      likedBy: [],
+      // Add reply data if replying
+      replyToId: replyingTo?.messageId,
+      replyToUsername: replyingTo?.username,
+      replyToMessage: replyingTo?.message,
+    };
+
+    // Use startTransition to prevent UI freeze
+    startTransition(() => {
+      setMessages((prev) => [...prev, newMessage]);
+      broadcastMessage(newMessage);
+      clearReply(); // Clear reply context after sending
+    });
+  };
+
+  // Clear chat
+  const handleClearChat = () => {
+    handleClearMessages();
+    broadcastClear();
+  };
+
+  // Export functionality removed - not currently used
+
+  // Open popout window
+  const openPopout = () => {
+    const popout = window.open(
+      "/popout.html",
+      POPOUT_WINDOW_NAME,
+      `width=${POPOUT_WIDTH},height=${POPOUT_HEIGHT},resizable=yes,scrollbars=yes`
+    );
+
+    if (popout) {
+      popoutWindowRef.current = popout;
+      setIsPopoutOpen(true);
+
+      // Poll to detect when popout window is closed
+      const checkClosed = setInterval(() => {
+        if (popout.closed) {
+          clearInterval(checkClosed);
+          setIsPopoutOpen(false);
+          popoutWindowRef.current = null;
+        }
+      }, 1000);
+    }
+  };
+
+  // Dynamic timing is handled in startGenerating() with setTimeout
+
+  // Handle tab visibility changes (fix browser suspension issues)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isGenerating) {
+        console.log('👁️ Tab became visible, checking generation state...');
+        
+        // Reset stuck flags that might prevent generation
+        if (isWaitingForAIRef.current) {
+          console.log('🔄 Resetting stuck AI generation flag');
+          isWaitingForAIRef.current = false;
+        }
+        
+        // Restart generation if it was suspended
+        if (!intervalRef.current && screenshot) {
+          console.log('🚀 Restarting generation after tab suspension');
+          generateChatMessageBatch();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isGenerating, screenshot]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+      if (captureIntervalRef.current) {
+        clearInterval(captureIntervalRef.current);
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+      }
+      rateLimiterRef.current.clear();
+    };
+  }, [mediaStream]);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: "k",
+      ctrlKey: true,
+      description: "Capture screen",
+      action: captureScreen,
+    },
+    {
+      key: " ",
+      description: "Toggle generation (Start/Stop)",
+      action: () => {
+        if (isGenerating) {
+          stopGenerating();
+        } else if (screenshot) {
+          startGenerating();
+        }
+      },
+    },
+    {
+      key: "/",
+      ctrlKey: true,
+      description: "Toggle settings",
+      action: () => setShowSettings((prev) => !prev),
+    },
+    {
+      key: "l",
+      ctrlKey: true,
+      shiftKey: true,
+      description: "Clear chat",
+      action: handleClearChat,
+    },
+  ]);
+
+  // Memoize whether to show empty state
+  const showEmptyState = useMemo(() => messages.length === 0, [messages.length]);
+
+  return (
+    <div className="min-h-screen h-screen bg-gradient-to-br from-background via-background-deep to-background flex">
+
+      {/* Fullscreen Container - No padding, no centering */}
+      <div className="w-full h-full relative">
+        {/* Subtle Cyber Glow Effect */}
+        <div className="absolute top-0 left-0 w-[50px] h-[50px] opacity-20 blur-md pointer-events-none"
+             style={{
+               background: 'radial-gradient(ellipse at center, hsl(var(--primary)), rgba(0, 255, 255, 0.2), transparent)'
+             }}
+        />
+        <div className="absolute bottom-0 right-0 w-[50px] h-[50px] opacity-20 blur-md pointer-events-none"
+             style={{
+               background: 'radial-gradient(ellipse at center, hsl(var(--secondary)), rgba(255, 0, 255, 0.2), transparent)'
+             }}
+        />
+
+        {/* Fullscreen Card Container */}
+        <div className="w-full h-full bg-white card-shadow overflow-hidden flex flex-col">
+          {/* Header */}
+          <ChatHeader 
+            viewerCount={viewerCount} 
+            isLive={isGenerating}
+            onOpenUserList={() => setShowUserList(true)}
+          />
+
+          {/* Settings Panel */}
+          {showSettings && (
+            <div
+              ref={settingsPanelRef}
+              className="px-5 py-4 border-b border-gray-200 bg-gray-50 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
+            >
+              <SettingsPanel settings={settings} onSettingsChange={handleSettingsChange} />
+            </div>
+          )}
+
+          {/* Chat Messages Container - Takes full height */}
+          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative" role="log" aria-live="polite" aria-label="Chat messages">
+            {/* Paused Indicator */}
+            {isPaused && settings.pauseOnScroll && (
+              <div className="sticky top-2 left-0 right-0 z-10 flex justify-center pointer-events-none mb-2">
+                <div className="bg-gray-800 text-white px-4 py-2 rounded-full text-xs font-semibold shadow-lg flex items-center gap-2 animate-pulse">
+                  <span>⏸️</span>
+                  <span>Chat Paused - Scroll to bottom to resume</span>
+                </div>
+              </div>
+            )}
+
+            {showEmptyState ? (
+              <NoChatEmptyState />
+            ) : (
+              messages.map((msg) => (
+                <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
+                  <ChatPersonality
+                    message={msg}
+                    settings={settings}
+                    onLike={(messageId) => {
+                      setMessages((prev) =>
+                        prev.map((m) =>
+                          m.id === messageId
+                            ? { ...m, likes: (m.likes ?? 0) + 1 }
+                            : m
+                        )
+                      );
+                    }}
+                    onReply={handleReply}
+                    onJumpToMessage={handleJumpToMessage}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Input Container */}
+          <div className="p-4 bg-white border-t border-gray-200">
+            <ChatInput
+              onSendMessage={sendModeratorMessage}
+              isGenerating={isGenerating}
+              isPopoutOpen={isPopoutOpen}
+              onToggleSettings={() => setShowSettings((prev) => !prev)}
+              onOpenPopout={openPopout}
+              onPlayStop={handlePlayStop}
+              onClearChat={handleClearMessages}
+              replyingTo={replyingTo ? { username: replyingTo.username, message: replyingTo.message } : null}
+              onClearReply={clearReply}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* User List Panel */}
+      <UserListPanel
+        users={allUsers}
+        isOpen={showUserList}
+        onClose={() => setShowUserList(false)}
+        onUserClick={(user) => {
+          setSelectedUser(user);
+          setShowUserList(false);
+          setShowUserProfile(true);
+        }}
+      />
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        user={selectedUser}
+        isOpen={showUserProfile}
+        onClose={() => {
+          setShowUserProfile(false);
+          setSelectedUser(null);
+        }}
+      />
+    </div>
+  );
+};
+
+export default Index;
