@@ -75,8 +75,8 @@ function generateUsername(personality: PersonalityType, existingNames: Set<strin
   do {
     const usePrefix = Math.random() > 0.4; // Increased from 0.5
     const useSuffix = Math.random() > 0.3; // Increased from 0.5
-    
-    let parts = [base];
+
+    const parts = [base];
     
     if (usePrefix) {
       const prefix = USERNAME_PREFIXES[Math.floor(Math.random() * USERNAME_PREFIXES.length)];

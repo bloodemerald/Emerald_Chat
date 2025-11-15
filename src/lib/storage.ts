@@ -14,7 +14,7 @@ export function saveMessages(messages: Message[]): void {
     const messagesToSave = messages.slice(-MAX_STORED_MESSAGES);
     localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(messagesToSave));
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to save messages to localStorage:', error);
     // If storage is full, try clearing and saving again
     if (error instanceof Error && error.name === 'QuotaExceededError') {
@@ -40,7 +40,7 @@ export function loadMessages(): Message[] {
       return Array.isArray(parsed) ? parsed : [];
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to load messages from localStorage:', error);
   }
   return [];
@@ -53,7 +53,7 @@ export function clearMessages(): void {
   try {
     localStorage.removeItem(CHAT_HISTORY_STORAGE_KEY);
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to clear messages from localStorage:', error);
   }
 }
@@ -65,7 +65,7 @@ export function saveSettings(settings: ChatSettings): void {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to save settings to localStorage:', error);
   }
 }
@@ -80,7 +80,7 @@ export function loadSettings(): ChatSettings | null {
       return JSON.parse(stored);
     }
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to load settings from localStorage:', error);
   }
   return null;
@@ -93,7 +93,7 @@ export function getStorageInfo(): { used: number; available: number; percentage:
   try {
     let used = 0;
     for (const key in localStorage) {
-      if (localStorage.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
         used += localStorage[key].length + key.length;
       }
     }
@@ -104,7 +104,7 @@ export function getStorageInfo(): { used: number; available: number; percentage:
 
     return { used, available, percentage };
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('Failed to get storage info:', error);
     return { used: 0, available: 0, percentage: 0 };
   }

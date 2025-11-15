@@ -40,12 +40,21 @@ npm install
 
 ### 3. Configure Environment Variables
 
-Your `.env` file should already contain your Supabase credentials:
+Create a `.env` file in the root directory from the example template:
+
+```sh
+# Copy the example file
+cp .env.example .env
+```
+
+Then edit `.env` with your Supabase credentials:
 
 ```env
-VITE_SUPABASE_URL=https://sluxxxqjvnhrelgxitma.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 ```
+
+You can find these values in your [Supabase Dashboard](https://app.supabase.com) under Settings → API.
 
 ### 4. Set Up Google AI API Key in Supabase
 
