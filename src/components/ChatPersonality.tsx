@@ -1,11 +1,12 @@
 import { memo } from "react";
-import { Reply } from "lucide-react";
+import { Reply, Shield } from "lucide-react";
 import { Message, ChatSettings } from "@/types/personality";
 import { PERSONALITIES } from "@/lib/personalities";
 import { renderEmotes } from "@/lib/emotes";
 import HeartLike from "./HeartLike";
 import { BadgeList } from "./badges/BadgeList";
 import { MessageReplyIndicator } from "./MessageReplyIndicator";
+import { ModeratorControls } from "./ModeratorControls";
 
 interface ChatPersonalityProps {
   message: Message;
@@ -13,9 +14,11 @@ interface ChatPersonalityProps {
   onLike?: (messageId: string) => void;
   onReply?: (messageId: string, username: string, message: string) => void;
   onJumpToMessage?: (messageId: string) => void;
+  onViewHistory?: (username: string) => void;
+  onViewProfile?: (username: string) => void;
 }
 
-export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage }: ChatPersonalityProps) => {
+export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile }: ChatPersonalityProps) => {
   const personality = message.personality ? PERSONALITIES[message.personality] : null;
 
   const handleLike = () => {
@@ -106,6 +109,23 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
         </div>
 
         <div className="flex gap-1.5 items-center opacity-60 group-hover:opacity-100 transition-opacity duration-200 flex-shrink-0 relative">
+          {/* Moderator controls */}
+          {!message.isModerator && onViewHistory && onViewProfile && (
+            <ModeratorControls
+              message={message}
+              onViewHistory={onViewHistory}
+              onViewProfile={onViewProfile}
+            >
+              <button
+                className="p-1.5 hover:bg-emerald-100 rounded transition-colors"
+                aria-label="Moderator controls"
+                title="Moderator controls"
+              >
+                <Shield className="w-4 h-4 text-emerald-600" />
+              </button>
+            </ModeratorControls>
+          )}
+
           {/* Reply button */}
           {onReply && (
             <button
@@ -118,10 +138,11 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
             </button>
           )}
 
-          <HeartLike 
+          <HeartLike
             messageId={message.id}
             initialLikes={message.likes ?? 0}
             onLike={handleLike}
+            likedBy={message.likedBy ?? []}
           />
         </div>
       </div>
@@ -130,5 +151,6 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
 }, (prevProps, nextProps) => {
   return prevProps.message.id === nextProps.message.id &&
          prevProps.message.likes === nextProps.message.likes &&
-         prevProps.message.threadCount === nextProps.message.threadCount;
+         prevProps.message.threadCount === nextProps.message.threadCount &&
+         JSON.stringify(prevProps.message.likedBy) === JSON.stringify(nextProps.message.likedBy);
 });
