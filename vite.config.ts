@@ -8,7 +8,10 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    strictPort: true, // Fail if port is already in use (important for Tauri)
   },
+  // Tauri expects a fixed port to attach to
+  clearScreen: false,
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
@@ -16,6 +19,12 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    // Tauri uses Chromium on Windows and WebKit on macOS and Linux
+    target: process.env.TAURI_ENV_PLATFORM == 'windows' ? 'chrome105' : 'safari13',
+    // Don't minify for debug builds
+    minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
+    // Produce sourcemaps for debug builds
+    sourcemap: !!process.env.TAURI_ENV_DEBUG,
     rollupOptions: {
       output: {
         manualChunks: {

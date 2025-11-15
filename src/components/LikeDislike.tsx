@@ -70,12 +70,12 @@ const LikeDislike: React.FC<LikeDislikeProps> = ({
     <StyledWrapper>
       <div className="container">
         <label htmlFor={`dislike-${messageId}`} onClick={handleDislike} style={{ cursor: 'pointer' }}>
-          <input 
-            type="radio" 
-            name={`evaluation-${messageId}`} 
+          <input
+            type="radio"
+            name={`evaluation-${messageId}`}
             id={`dislike-${messageId}`}
             checked={userVote === 'dislike'}
-            onChange={(e) => handleDislike(e as any)}
+            onChange={(e) => handleDislike(e as unknown as React.MouseEvent)}
             style={{ pointerEvents: 'none' }}
           />
           <svg className="icon dislike" xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24">
@@ -106,12 +106,12 @@ const LikeDislike: React.FC<LikeDislikeProps> = ({
           )}
         </div>
         <label htmlFor={`like-${messageId}`} onClick={handleLike} style={{ cursor: 'pointer' }}>
-          <input 
-            type="radio" 
-            name={`evaluation-${messageId}`} 
+          <input
+            type="radio"
+            name={`evaluation-${messageId}`}
             id={`like-${messageId}`}
             checked={userVote === 'like'}
-            onChange={(e) => handleLike(e as any)}
+            onChange={(e) => handleLike(e as unknown as React.MouseEvent)}
             style={{ pointerEvents: 'none' }}
           />
           <svg className="icon like" xmlns="http://www.w3.org/2000/svg" width={16} height={16} viewBox="0 0 24 24">
