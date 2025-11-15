@@ -16,8 +16,8 @@ export const UserListPanel = ({ users, isOpen, onClose, onUserClick }: UserListP
 
   // Filter and sort users
   const sortedUsers = useMemo(() => {
-    let filtered = users.filter((user) => 
-      (user.state === 'active' || user.state === 'lurking') && 
+    const filtered = users.filter((user) =>
+      (user.state === 'active' || user.state === 'lurking') &&
       user.username.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
