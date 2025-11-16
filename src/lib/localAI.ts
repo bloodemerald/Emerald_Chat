@@ -98,6 +98,7 @@ export async function generateWithOllama({
   model = "llava:13b", // Default to 13b model for better vision understanding
   ollamaApiUrl,
   batchSize = 3,
+  additionalContext,
 }: {
   screenshot: string;
   recentChat: string[];
@@ -105,6 +106,7 @@ export async function generateWithOllama({
   model?: string;
   ollamaApiUrl?: string;
   batchSize?: number;
+  additionalContext?: string;
 }): Promise<{ 
   messages: Array<{ message: string; personality: PersonalityType }>;
   detectedContent?: string;
@@ -120,6 +122,10 @@ export async function generateWithOllama({
 
     console.log("📸 Image size:", (base64Image.length / 1024).toFixed(2), "KB");
     console.log("🎮 Sending to Ollama with model:", model);
+
+    const moderatorFocus = additionalContext && additionalContext.trim().length > 0
+      ? `\n\nMODERATOR FOCUS: ${additionalContext.trim()}`
+      : "";
 
     // Enhanced prompt for specific, contextual reactions
     const visionPrompt = `You are ${batchSize} different viewers watching screen content. Write ${batchSize} SHORT chat messages about what you see.
@@ -145,7 +151,7 @@ BAD EXAMPLES (DO NOT DO THIS):
 "This appears to be a screenshot of..."
 "The user is displaying a web browser..."
 
-Recent chat: ${recentChat.slice(-3).join(", ") || "none"}
+Recent chat: ${recentChat.slice(-3).join(", ") || "none"}${moderatorFocus}
 
 Write ${batchSize} SHORT messages about what you see:`;
 

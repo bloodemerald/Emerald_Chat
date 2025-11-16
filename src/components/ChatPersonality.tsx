@@ -138,7 +138,7 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
             </span>
 
             {/* Bit Cheer Badge - Only show if > 0 bits */}
-            {message.bits && message.bits > 0 && (
+            {(message.bits ?? 0) > 0 && (
               <span 
                 className="text-[10px] px-1.5 py-0.5 text-white rounded font-bold animate-pulse"
                 style={{ 

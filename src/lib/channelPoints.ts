@@ -18,7 +18,13 @@ export interface ChannelPointRedemption {
  * Result of a redemption
  */
 export interface RedemptionEffect {
-  type: 'highlight_bomb' | 'color_blast' | 'super_like' | 'personality_swap';
+  type:
+    | 'highlight_bomb'
+    | 'color_blast'
+    | 'super_like'
+    | 'personality_swap'
+    | 'ghost_message'
+    | 'copy_pasta';
   userId: string;
   targetUser?: string;
   targetMessage?: string;

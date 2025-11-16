@@ -20,6 +20,7 @@ import {
  * Manages all engagement systems and AI-driven events
  */
 class EngagementManager {
+  private isRunning = false;
   private channelPointsInterval: NodeJS.Timeout | null = null;
   private bitCheerCheckInterval: NodeJS.Timeout | null = null;
   private bitGiftCheckInterval: NodeJS.Timeout | null = null;
@@ -30,6 +31,8 @@ class EngagementManager {
    * Start all engagement systems
    */
   start() {
+    if (this.isRunning) return;
+    this.isRunning = true;
     console.log('🎮 Starting Engagement Manager...');
 
     // Start channel points accumulation
@@ -48,6 +51,8 @@ class EngagementManager {
    * Stop all engagement systems
    */
   stop() {
+    if (!this.isRunning) return;
+    this.isRunning = false;
     console.log('🛑 Stopping Engagement Manager...');
 
     // Stop channel points
@@ -102,9 +107,9 @@ class EngagementManager {
    * Start AI-driven events
    */
   private startAIEvents() {
-    // Check for AI bit cheers every 3-5 seconds (TESTING - increased frequency)
+    // Check for AI bit cheers every 15-30 seconds (slower, more scarce)
     const scheduleNextCheerCheck = () => {
-      const delay = 3000 + Math.random() * 2000; // 3-5s
+      const delay = 15000 + Math.random() * 15000; // 15-30s
       this.bitCheerCheckInterval = setTimeout(() => {
         const activeUsers = userPool.getActiveUsers();
         if (activeUsers.length > 0) {
@@ -116,9 +121,9 @@ class EngagementManager {
     };
     scheduleNextCheerCheck();
 
-    // Check for AI bit gifts every 5-8 seconds (TESTING - increased frequency)
+    // Check for AI bit gifts every 30-60 seconds (slower, more scarce)
     const scheduleNextGiftCheck = () => {
-      const delay = 5000 + Math.random() * 3000; // 5-8s
+      const delay = 30000 + Math.random() * 30000; // 30-60s
       this.bitGiftCheckInterval = setTimeout(() => {
         bitGifting.attemptAIGift();
         scheduleNextGiftCheck();
@@ -126,9 +131,9 @@ class EngagementManager {
     };
     scheduleNextGiftCheck();
 
-    // Check for AI subscriptions every 8-12 seconds (TESTING - increased frequency)
+    // Check for AI subscriptions every 60-120 seconds (slower)
     const scheduleNextSubCheck = () => {
-      const delay = 8000 + Math.random() * 4000; // 8-12s
+      const delay = 60000 + Math.random() * 60000; // 60-120s
       this.subscriptionCheckInterval = setTimeout(() => {
         // Try new sub or resub
         subscriptions.attemptAISubscription();
@@ -137,9 +142,9 @@ class EngagementManager {
     };
     scheduleNextSubCheck();
 
-    // Check for AI gift subs every 10-15 seconds (TESTING - increased frequency)
+    // Check for AI gift subs every 90-150 seconds (slower)
     const scheduleNextGiftSubCheck = () => {
-      const delay = 10000 + Math.random() * 5000; // 10-15s
+      const delay = 90000 + Math.random() * 60000; // 90-150s
       setTimeout(() => {
         subscriptions.attemptAIGiftSub();
         scheduleNextGiftSubCheck();
@@ -147,9 +152,9 @@ class EngagementManager {
     };
     scheduleNextGiftSubCheck();
 
-    // Check for AI channel point redemptions every 5-8 seconds (TESTING - increased frequency)
+    // Check for AI channel point redemptions every 30-60 seconds (slower)
     const scheduleNextRedemptionCheck = () => {
-      const delay = 5000 + Math.random() * 3000; // 5-8s
+      const delay = 30000 + Math.random() * 30000; // 30-60s
       this.redemptionCheckInterval = setTimeout(() => {
         channelPoints.attemptAIRedemption();
         scheduleNextRedemptionCheck();

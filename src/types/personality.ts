@@ -50,7 +50,13 @@ export interface Message {
   likedBy?: string[];
   // Channel point effects
   redemptionEffect?: {
-    type: 'highlight_bomb' | 'ghost_message' | 'color_blast' | 'super_like' | 'personality_swap';
+    type:
+      | 'highlight_bomb'
+      | 'ghost_message'
+      | 'color_blast'
+      | 'super_like'
+      | 'personality_swap'
+      | 'copy_pasta';
     userId: string;
     targetUser?: string;
     targetMessage?: string;

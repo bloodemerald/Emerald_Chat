@@ -1,4 +1,5 @@
 import { userPool, ChatUser } from './userPool';
+import { moderatorManager } from './moderators';
 
 /**
  * Bit Gift Event
@@ -78,14 +79,14 @@ class BitGiftingManager {
    * 2% chance per message of gifting
    */
   attemptAIGift(): BitGift | null {
-    // 30% chance to gift (TESTING - increased from 2%)
-    if (Math.random() > 0.3) return null;
+    // 20% chance to gift on each scheduled check
+    if (Math.random() > 0.2) return null;
 
     const activeUsers = userPool.getActiveUsers();
     if (activeUsers.length < 2) return null;
 
-    // Find users with 500+ bits who can gift
-    const eligibleGifters = activeUsers.filter((u) => u.bits >= 500);
+    // Find moderators with 500+ bits who can gift
+    const eligibleGifters = activeUsers.filter((u) => u.bits >= 500 && moderatorManager.isModerator(u.id));
     if (eligibleGifters.length === 0) return null;
 
     const gifter = eligibleGifters[Math.floor(Math.random() * eligibleGifters.length)];
@@ -142,9 +143,9 @@ class BitGiftingManager {
   giftForMessage(messageUsername: string, quality: 'funny' | 'helpful'): BitGift | null {
     const activeUsers = userPool.getActiveUsers();
 
-    // Find eligible gifters (500+ bits, not the message author)
+    // Find eligible gifters (mods with 500+ bits, not the message author)
     const eligibleGifters = activeUsers.filter(
-      (u) => u.bits >= 500 && u.username !== messageUsername
+      (u) => u.bits >= 500 && u.username !== messageUsername && moderatorManager.isModerator(u.id)
     );
 
     if (eligibleGifters.length === 0) return null;

@@ -283,6 +283,14 @@ const Index = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (isGenerating) {
+      engagementManager.start();
+    } else {
+      engagementManager.stop();
+    }
+  }, [isGenerating]);
+
   // Listen for channel point redemption effects
   useEffect(() => {
     channelPoints.onRedemption((effect) => {
@@ -749,7 +757,19 @@ Rules:
           selectedPersonalities.push(personality);
         }
 
-        const recentMessages = messages.slice(-RECENT_MESSAGES_LIMIT).map((m) => `${m.isModerator ? "[MODERATOR]" : ""} ${m.username}: ${m.message}`);
+        const recentMessages = messages
+          .slice(-RECENT_MESSAGES_LIMIT)
+          .map((m) => `${m.isModerator ? "[MODERATOR]" : ""} ${m.username}: ${m.message}`);
+
+        // Find the most recent moderator message so the AI can answer it directly
+        const latestModeratorMessage = [...messages]
+          .slice()
+          .reverse()
+          .find((m) => m.isModerator);
+
+        const moderatorAdditionalContext = latestModeratorMessage
+          ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.`
+          : undefined;
 
         if (shouldAddLurkerJoin(messages.length)) {
           selectedPersonalities[0] = 'lurker';
@@ -784,6 +804,7 @@ Rules:
                   model: settings.ollamaModel,
                   ollamaApiUrl: targetOllamaUrl,
                   batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
+                  additionalContext: moderatorAdditionalContext,
                 }),
                 timeoutPromise
               ]) as { messages: Array<{ message: string; personality: PersonalityType }> };
@@ -824,7 +845,13 @@ Rules:
           console.log("☁️ Using Cloud AI...");
           try {
             const geminiResponse = await supabase.functions.invoke("generate-chat-gemini", {
-              body: { screenshot, recentChat: recentMessages, personalities: selectedPersonalities, batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE },
+              body: {
+                screenshot,
+                recentChat: recentMessages,
+                personalities: selectedPersonalities,
+                batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
+                additionalContext: moderatorAdditionalContext,
+              },
             });
             data = geminiResponse.data;
             error = geminiResponse.error;
@@ -832,7 +859,13 @@ Rules:
           } catch (geminiError) {
             console.warn("⚠️ Google Gemini failed, trying OpenRouter fallback:", geminiError);
             const openRouterResponse = await supabase.functions.invoke("generate-chat", {
-              body: { screenshot, recentChat: recentMessages, personalities: selectedPersonalities, batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE },
+              body: {
+                screenshot,
+                recentChat: recentMessages,
+                personalities: selectedPersonalities,
+                batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
+                additionalContext: moderatorAdditionalContext,
+              },
             });
             data = openRouterResponse.data;
             error = openRouterResponse.error;
@@ -1263,7 +1296,7 @@ Rules:
           )}
 
           {/* Chat Messages Container - Takes full height */}
-          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative" role="log" aria-live="polite" aria-label="Chat messages">
+          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative flex flex-col" role="log" aria-live="polite" aria-label="Chat messages">
             {/* Paused Indicator */}
             {isPaused && settings.pauseOnScroll && (
               <div className="sticky top-2 left-0 right-0 z-10 flex justify-center pointer-events-none mb-2">

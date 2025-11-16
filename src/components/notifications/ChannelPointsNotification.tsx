@@ -91,11 +91,11 @@ export function ChannelPointsNotification({ effect, onComplete }: ChannelPointsN
   return (
     <div
       className={`
-        bg-gradient-to-r ${info.color}
+        bg-gradient-to-r ${info.color} backdrop-blur-xl
         text-white rounded-lg shadow-2xl
         px-6 py-4 min-w-[320px] max-w-[400px]
         transition-all duration-300
-        ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-[450px] opacity-0'}
+        ${isVisible && !isExiting ? 'translate-x-0 opacity-80' : 'translate-x-[450px] opacity-0'}
         cursor-pointer hover:scale-105
         border-2 border-white/30
         relative

@@ -50,11 +50,11 @@ export function BitGiftNotification({ gift, onComplete }: BitGiftNotificationPro
   return (
     <div
       className={`
-        bg-gradient-to-r from-purple-600 to-pink-600
+        bg-gradient-to-r from-purple-600/90 to-pink-600/90 backdrop-blur-xl
         text-white rounded-lg shadow-2xl
         px-6 py-4 min-w-[320px] max-w-[400px]
         transition-all duration-300
-        ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-[450px] opacity-0'}
+        ${isVisible && !isExiting ? 'translate-x-0 opacity-80' : 'translate-x-[450px] opacity-0'}
         cursor-pointer hover:scale-105
         border-2 border-purple-400
         relative

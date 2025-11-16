@@ -290,14 +290,16 @@ export function generateSubscriberMonths(): number {
 }
 
 /**
- * Generate random bits (0-50000)
+ * Generate random bits (scarce economy)
  */
 export function generateBits(): number {
   const rand = Math.random();
-  if (rand < 0.4) return 0; // 40% no bits
-  if (rand < 0.6) return Math.floor(Math.random() * 100); // 0-100
-  if (rand < 0.8) return Math.floor(Math.random() * 1000) + 100; // 100-1100
-  if (rand < 0.9) return Math.floor(Math.random() * 5000) + 1000; // 1000-6000
-  if (rand < 0.97) return Math.floor(Math.random() * 5000) + 5000; // 5000-10000
-  return Math.floor(Math.random() * 40000) + 10000; // 10000-50000
+  // Most users have no bits at all
+  if (rand < 0.7) return 0; // 70% no bits
+
+  // Small handful have a modest stash
+  if (rand < 0.95) return Math.floor(Math.random() * 100) + 25; // 25-125
+
+  // Rare whales with a larger balance
+  return Math.floor(Math.random() * 900) + 100; // 100-1000
 }

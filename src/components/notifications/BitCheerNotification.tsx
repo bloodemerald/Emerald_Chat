@@ -39,10 +39,10 @@ export function BitCheerNotification({ cheer, onComplete }: BitCheerNotification
   return (
     <div
       className={`
-        text-white rounded-lg shadow-2xl
+        text-white rounded-lg shadow-2xl backdrop-blur-xl
         px-6 py-4 min-w-[320px] max-w-[400px]
         transition-all duration-300
-        ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-[450px] opacity-0'}
+        ${isVisible && !isExiting ? 'translate-x-0 opacity-80' : 'translate-x-[450px] opacity-0'}
         cursor-pointer hover:scale-105
         border-2
         relative
