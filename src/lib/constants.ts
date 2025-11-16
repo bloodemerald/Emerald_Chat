@@ -1,9 +1,9 @@
 // Application Constants
 
-// Screenshot Configuration
-export const SCREENSHOT_MAX_WIDTH = 1024; // Balanced resolution for llava:13b
-export const SCREENSHOT_MAX_HEIGHT = 1024; // Balanced resolution for llava:13b
-export const SCREENSHOT_QUALITY = 0.85; // 0-1 for JPEG compression (balanced quality/size)
+// Screenshot Configuration - OPTIMIZED FOR PERFORMANCE
+export const SCREENSHOT_MAX_WIDTH = 800; // Reduced for performance
+export const SCREENSHOT_MAX_HEIGHT = 800; // Reduced for performance
+export const SCREENSHOT_QUALITY = 0.6; // Lower quality = better performance (AI can still see content)
 export const SCREENSHOT_FORMAT = 'image/jpeg'; // JPEG for Ollama compatibility
 
 // Chat Configuration

@@ -76,8 +76,9 @@ function generateUsername(personality: PersonalityType, existingNames: Set<strin
   let attempts = 0;
   
   do {
-    const usePrefix = Math.random() > 0.4; // Increased from 0.5
-    const useSuffix = Math.random() > 0.3; // Increased from 0.5
+    const usePrefix = Math.random() > 0.6; // 40% chance for prefix
+    const useSuffix = Math.random() > 0.7; // 30% chance for suffix
+    const useNumbers = Math.random() > 0.8; // 20% chance for numbers (REALISTIC)
 
     const parts = [base];
     
@@ -91,16 +92,18 @@ function generateUsername(personality: PersonalityType, existingNames: Set<strin
       parts.push(suffix);
     }
     
-    // Always add random number for guaranteed uniqueness
-    const randomNum = Math.floor(Math.random() * 9999) + (attempts * 1000);
-    parts.push(String(randomNum));
+    // Only add numbers if needed for uniqueness or 20% random chance
+    if (useNumbers || attempts > 5) {
+      const randomNum = Math.floor(Math.random() * 999) + 1; // Smaller numbers (1-999)
+      parts.push(String(randomNum));
+    }
     
     username = parts.join('_');
     attempts++;
     
     // Force uniqueness after 10 attempts
     if (attempts >= 10) {
-      username = `${username}_${Date.now().toString().slice(-4)}`;
+      username = `${base}_${Date.now().toString().slice(-4)}`;
     }
   } while (existingNames.has(username) && attempts < 20);
   
@@ -203,6 +206,13 @@ class UserPool {
    */
   getActiveChattersCount(): number {
     return this.getUsersByState('active').length;
+  }
+  
+  /**
+   * Check if username already exists in any state
+   */
+  hasUsername(username: string): boolean {
+    return Array.from(this.users.values()).some(u => u.username === username);
   }
   
   /**
@@ -343,6 +353,23 @@ class UserPool {
    */
   getActiveUsers(): ChatUser[] {
     return [...this.getUsersByState('active'), ...this.getUsersByState('lurking')];
+  }
+
+  /**
+   * Add a moderator user to the pool (bypasses normal initialization)
+   */
+  addModeratorUser(user: ChatUser): void {
+    // Check for duplicate username
+    if (this.hasUsername(user.username)) {
+      console.warn(`⚠️ Moderator username ${user.username} already exists, skipping`);
+      return;
+    }
+    
+    // Add to pool
+    this.users.set(user.id, user);
+    this.usernameSet.add(user.username);
+    console.log(`✅ Added moderator ${user.username} to user pool (State: ${user.state}, Personality: ${user.personality})`);
+    console.log(`📊 Total users: ${this.users.size}, Active users: ${this.getActiveUsers().length}`);
   }
 }
 

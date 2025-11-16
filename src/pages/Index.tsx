@@ -42,6 +42,13 @@ import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
 import { staggeredLikes } from "@/lib/staggeredLikes";
 import { userPool, ChatUser } from "@/lib/userPool";
+import { channelPoints } from "@/lib/channelPoints";
+import { bitCheering, BitCheer } from "@/lib/bitCheering";
+import { bitGifting, BitGift } from "@/lib/bitGifting";
+import { subscriptions } from "@/lib/subscriptions";
+import { engagementManager } from "@/lib/engagementManager";
+import { moderatorManager } from "@/lib/moderators";
+import { NotificationOverlay } from "@/components/notifications/NotificationOverlay";
 
 const DEFAULT_SETTINGS: ChatSettings = {
   personalities: {
@@ -135,6 +142,36 @@ const Index = () => {
       }
     }
     return "";
+  }, []);
+
+  // Keep message bit badges in sync with user balances (cheers & gifts)
+  useEffect(() => {
+    const updateBitsForUser = (username: string) => {
+      const user = userPool.getUserByUsername(username);
+      if (!user) return;
+      setMessages((current) =>
+        current.map((msg) =>
+          msg.username === username ? { ...msg, bits: user.bits } : msg
+        )
+      );
+    };
+
+    const handleCheer = (cheer: BitCheer) => {
+      updateBitsForUser(cheer.username);
+    };
+
+    const handleGift = (gift: BitGift) => {
+      updateBitsForUser(gift.gifterUsername);
+      updateBitsForUser(gift.recipientUsername);
+    };
+
+    bitCheering.onCheer(handleCheer);
+    bitGifting.onGift(handleGift);
+
+    return () => {
+      bitCheering.offCheer(handleCheer);
+      bitGifting.offGift(handleGift);
+    };
   }, []);
 
   // Load saved data on mount
@@ -234,12 +271,74 @@ const Index = () => {
 
     console.log('🎬 User simulation started');
 
+    // Join moderators first (high priority)
+    moderatorManager.joinModerators();
+
     return () => {
       userLifecycle.stop();
       retroactiveLikes.stop();
       staggeredLikes.stop();
+      moderatorManager.reset();
       console.log('🛑 User simulation stopped');
     };
+  }, []);
+
+  // Listen for channel point redemption effects
+  useEffect(() => {
+    channelPoints.onRedemption((effect) => {
+      console.log(`🎯🎯🎯 CHANNEL POINT EFFECT: ${effect.type} by ${effect.userId}`);
+      console.log(`Target message: ${effect.targetMessage}, Target user: ${effect.targetUser}`);
+      
+      // Effect will be applied to the target message
+      
+      // Apply effect to target message or user
+      setMessages((currentMessages) => {
+        console.log(`🔍 Looking for target in ${currentMessages.length} messages`);
+        console.log(`🔍 Target user: ${effect.targetUser}, Target message: ${effect.targetMessage}`);
+        
+        let foundTarget = false;
+        const result = currentMessages.map((msg) => {
+          
+          // Check if this message is the target
+          const isTarget = effect.targetMessage === msg.id || 
+                          (effect.targetUser && msg.username === effect.targetUser);
+          
+          if (isTarget) {
+            foundTarget = true;
+            console.log(`✅✅✅ APPLYING ${effect.type} to "${msg.message.substring(0, 30)}..." by ${msg.username}`);
+            const effectDuration = effect.duration || 30000; // Default 30 seconds
+            
+            if (effect.type === 'super_like') {
+              // Super like adds instant likes AND visual shake effect
+              return {
+                ...msg,
+                likes: (msg.likes || 0) + (effect.data?.likes || 5),
+                likedBy: [...(msg.likedBy || []), effect.userId],
+                redemptionEffect: effect,
+                effectExpiry: Date.now() + effectDuration
+              };
+            } else {
+              // Other effects add visual effect with expiry
+              return {
+                ...msg,
+                redemptionEffect: effect,
+                effectExpiry: Date.now() + effectDuration
+              };
+            }
+          }
+          // No channel point updates needed in chat view
+          return msg;
+        });
+        
+        if (!foundTarget) {
+          console.warn(`⚠️ Could not find target for ${effect.type} effect!`);
+        }
+        
+        return result;
+      });
+      
+      // Notification is handled by the engagement manager
+    });
   }, []);
 
   // Sync users from user pool
@@ -281,6 +380,24 @@ const Index = () => {
       retroactiveLikes.processMessages(messages);
     }
   }, [messages]);
+
+  // Clean up expired channel point effects
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      setMessages((currentMessages) => {
+        return currentMessages.map((msg) => {
+          if (msg.effectExpiry && msg.effectExpiry <= Date.now()) {
+            // Remove expired effect
+            const { redemptionEffect, effectExpiry, ...cleanMessage } = msg;
+            return cleanMessage;
+          }
+          return msg;
+        });
+      });
+    }, 1000); // Check every second
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   const handleSettingsChange = (newSettings: ChatSettings) => {
     setSettings(newSettings);
@@ -460,6 +577,7 @@ const Index = () => {
         minute: "2-digit",
       }),
       personality,
+      isModerator: moderatorManager.isModeratorByUsername(chatUser.username),
       likes: 0,
       likedBy: [],
       badges: chatUser.badges,
@@ -846,7 +964,7 @@ Rules:
     setIsGenerating(true);
     generateChatMessageBatch();
 
-    // Start continuous screen capture (every 5 seconds to keep context fresh)
+    // Start continuous screen capture (every 15 seconds - OPTIMIZED for performance)
     // Store in a separate ref to avoid triggering the auto-start effect
     const activeStream = mediaStreamRef.current;
     if (activeStream) {
@@ -863,7 +981,7 @@ Rules:
           // If frame capture fails, users should realistically comment
           console.warn("⚠️ Failed to capture new frame");
         }
-      }, 5000); // Capture new frame every 5 seconds
+      }, 15000); // Capture new frame every 15 seconds (OPTIMIZED)
     }
 
     // Use dynamic timing instead of fixed interval
@@ -1108,6 +1226,8 @@ Rules:
 
   return (
     <div className="min-h-screen h-screen bg-gradient-to-br from-background via-background-deep to-background flex">
+      {/* Notification Overlay for bits, subs, channel points */}
+      <NotificationOverlay />
 
       {/* Fullscreen Container - No padding, no centering */}
       <div className="w-full h-full relative">
@@ -1143,7 +1263,7 @@ Rules:
           )}
 
           {/* Chat Messages Container - Takes full height */}
-          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 p-4 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative" role="log" aria-live="polite" aria-label="Chat messages">
+          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative" role="log" aria-live="polite" aria-label="Chat messages">
             {/* Paused Indicator */}
             {isPaused && settings.pauseOnScroll && (
               <div className="sticky top-2 left-0 right-0 z-10 flex justify-center pointer-events-none mb-2">
@@ -1157,27 +1277,35 @@ Rules:
             {showEmptyState ? (
               <NoChatEmptyState />
             ) : (
-              messages.map((msg) => (
-                <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
-                  <ChatPersonality
-                    message={msg}
-                    settings={settings}
-                    onLike={(messageId) => {
-                      setMessages((prev) =>
-                        prev.map((m) =>
-                          m.id === messageId
-                            ? { ...m, likes: (m.likes ?? 0) + 1 }
-                            : m
-                        )
-                      );
-                    }}
-                    onReply={handleReply}
-                    onJumpToMessage={handleJumpToMessage}
-                    onViewHistory={handleViewHistory}
-                    onViewProfile={handleViewProfile}
-                  />
-                </div>
-              ))
+              (() => {
+                // Find the message with the most likes for bubble effect
+                const mostLikedMessage = messages.reduce((max, msg) => 
+                  (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
+                , messages[0]);
+                
+                return messages.map((msg) => (
+                  <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
+                    <ChatPersonality
+                      message={msg}
+                      settings={settings}
+                      isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
+                      onLike={(messageId) => {
+                        setMessages((prev) =>
+                          prev.map((m) =>
+                            m.id === messageId
+                              ? { ...m, likes: (m.likes ?? 0) + 1 }
+                              : m
+                          )
+                        );
+                      }}
+                      onReply={handleReply}
+                      onJumpToMessage={handleJumpToMessage}
+                      onViewHistory={handleViewHistory}
+                      onViewProfile={handleViewProfile}
+                    />
+                  </div>
+                ));
+              })()
             )}
           </div>
 

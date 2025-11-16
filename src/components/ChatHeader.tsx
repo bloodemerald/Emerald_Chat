@@ -13,10 +13,13 @@ export const ChatHeader = ({
   onOpenUserList,
 }: ChatHeaderProps) => {
   return (
-    <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+    <div className="flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-xl border-b border-gray-200/50 shadow-sm">
       <EmeraldChatHeader />
       {viewerCount > 0 && (
-        <div onClick={onOpenUserList} className={onOpenUserList ? 'cursor-pointer' : ''}>
+        <div 
+          onClick={onOpenUserList} 
+          className={`transition-transform hover:scale-105 ${onOpenUserList ? 'cursor-pointer' : ''}`}
+        >
           <ViewerCount count={viewerCount} isLive={isLive} />
         </div>
       )}

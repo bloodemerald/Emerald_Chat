@@ -132,8 +132,8 @@ class BitCheeringManager {
    * 5% chance AI uses bits per message
    */
   attemptAICheer(user: ChatUser, message?: string): BitCheer | null {
-    // 5% chance to cheer
-    if (Math.random() > 0.05) return null;
+    // 50% chance to cheer (TESTING - increased from 5%)
+    if (Math.random() > 0.5) return null;
 
     // Check if user has bits
     if (user.bits < 1) return null;
@@ -208,6 +208,10 @@ class BitCheeringManager {
    */
   onCheer(callback: (cheer: BitCheer) => void) {
     this.cheerListeners.push(callback);
+  }
+
+  offCheer(callback: (cheer: BitCheer) => void) {
+    this.cheerListeners = this.cheerListeners.filter((listener) => listener !== callback);
   }
 
   /**

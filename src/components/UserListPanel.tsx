@@ -51,23 +51,23 @@ export const UserListPanel = ({ users, isOpen, onClose, onUserClick }: UserListP
 
       {/* Sliding Panel */}
       <div 
-        className={`fixed right-0 top-0 h-full w-80 bg-white shadow-2xl z-50 transform transition-transform duration-300 ease-out ${
+        className={`fixed right-0 top-0 h-full w-80 bg-white/95 backdrop-blur-xl border-l border-gray-200/70 shadow-xl z-50 transform transition-transform duration-300 ease-out ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4">
+        <div className="bg-white/90 backdrop-blur-xl border-b border-gray-200/70 p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              <h2 className="font-bold text-lg">Viewers</h2>
-              <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs font-semibold">
+              <Users className="w-5 h-5 text-gray-500" />
+              <h2 className="font-bold text-sm text-gray-900">Viewers</h2>
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-50 text-gray-700 border border-gray-200/70">
                 {activeCount}
               </span>
             </div>
             <button
               onClick={onClose}
-              className="hover:bg-white/20 rounded-lg p-1.5 transition-colors"
+              className="text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-1.5 transition-colors"
               aria-label="Close user list"
             >
               <X className="w-5 h-5" />
@@ -76,13 +76,13 @@ export const UserListPanel = ({ users, isOpen, onClose, onUserClick }: UserListP
 
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/60" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search viewers..."
-              className="w-full bg-white/20 text-white placeholder:text-white/60 rounded-lg pl-10 pr-3 py-2 text-sm focus:outline-none focus:bg-white/30 transition-colors"
+              className="w-full bg-gray-50 text-gray-900 placeholder:text-gray-400 rounded-lg pl-10 pr-3 py-2 text-sm border border-gray-200 focus:outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 transition-colors"
             />
           </div>
         </div>

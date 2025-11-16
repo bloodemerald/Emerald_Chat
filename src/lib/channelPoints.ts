@@ -1,4 +1,4 @@
-import { userPool, ChatUser } from './userPool';
+import { userPool } from './userPool';
 
 /**
  * Channel Point Redemption Definition
@@ -18,7 +18,7 @@ export interface ChannelPointRedemption {
  * Result of a redemption
  */
 export interface RedemptionEffect {
-  type: 'highlight_bomb' | 'ghost_message' | 'color_blast' | 'super_like' | 'copy_pasta' | 'personality_swap';
+  type: 'highlight_bomb' | 'color_blast' | 'super_like' | 'personality_swap';
   userId: string;
   targetUser?: string;
   targetMessage?: string;
@@ -68,23 +68,7 @@ class ChannelPointsManager {
           userId,
           targetUser,
           targetMessage,
-          duration: 5000,
-        }),
-      },
-      {
-        id: 'ghost_message',
-        name: 'Ghost Message',
-        cost: 300,
-        icon: '👻',
-        description: "Make someone's message invisible for 10s",
-        cooldown: 45,
-        lastUsed: 0,
-        effect: (userId, targetUser, targetMessage) => ({
-          type: 'ghost_message',
-          userId,
-          targetUser,
-          targetMessage,
-          duration: 10000,
+          duration: 30000, // 30 seconds so it's visible
         }),
       },
       {
@@ -122,26 +106,11 @@ class ChannelPointsManager {
         }),
       },
       {
-        id: 'copy_pasta',
-        name: 'Copy Pasta',
-        cost: 600,
-        icon: '🔄',
-        description: 'Force everyone to repeat a message',
-        cooldown: 90,
-        lastUsed: 0,
-        effect: (userId, targetUser, targetMessage) => ({
-          type: 'copy_pasta',
-          userId,
-          targetMessage,
-          data: { copies: 3 + Math.floor(Math.random() * 3) }, // 3-5 copies
-        }),
-      },
-      {
         id: 'personality_swap',
-        name: 'Personality Swap',
+        name: 'Bold Blast',
         cost: 800,
-        icon: '🎭',
-        description: "Temporarily change someone's personality",
+        icon: '💪',
+        description: 'Make a message BOLD and larger',
         cooldown: 120,
         lastUsed: 0,
         effect: (userId, targetUser) => ({
@@ -198,7 +167,7 @@ class ChannelPointsManager {
     const activeUsers = userPool.getActiveUsers();
 
     activeUsers.forEach((user) => {
-      const points = 10 + Math.floor(Math.random() * 41); // 10-50 points per minute
+      const points = 5 + Math.floor(Math.random() * 16); // 5-20 points per minute (REDUCED)
       this.addPoints(user.id, user.username, points);
     });
 
@@ -215,11 +184,12 @@ class ChannelPointsManager {
       userPoints = {
         userId,
         username,
-        points: 0,
-        totalEarned: 0,
+        points: 500, // Start with 500 points so they can redeem immediately
+        totalEarned: 500,
         lastEarnedTime: Date.now(),
       };
       this.userPoints.set(userId, userPoints);
+      console.log(`🎁 New user ${username} started with 500 points`);
     }
 
     userPoints.points += amount;
@@ -233,10 +203,13 @@ class ChannelPointsManager {
   private deductPoints(userId: string, amount: number): boolean {
     const userPoints = this.userPoints.get(userId);
     if (!userPoints || userPoints.points < amount) {
+      console.warn(`⚠️ ${userId} doesn't have enough points (has ${userPoints?.points || 0}, needs ${amount})`);
       return false;
     }
 
+    const oldPoints = userPoints.points;
     userPoints.points -= amount;
+    console.log(`💸 ${userId} spent ${amount} points (${oldPoints} → ${userPoints.points})`);
     return true;
   }
 
@@ -334,22 +307,35 @@ class ChannelPointsManager {
   }
 
   /**
-   * AI-driven redemption logic (random redemptions by AI users)
+   * AI attempts to redeem a reward
    */
   attemptAIRedemption(): RedemptionEffect | null {
+    console.log('🎲 Attempting AI channel point redemption...');
     const activeUsers = userPool.getActiveUsers();
-    if (activeUsers.length === 0) return null;
+    console.log(`👥 Active users: ${activeUsers.length}`);
+    if (activeUsers.length === 0) {
+      console.warn('⚠️ No active users for redemption');
+      return null;
+    }
 
-    // 2% chance per check
-    if (Math.random() > 0.02) return null;
+    // 30% chance per check (TESTING - increased from 2%)
+    if (Math.random() > 0.3) {
+      console.log('🎲 Random chance failed (70% skip rate)');
+      return null;
+    }
+    console.log('✅ Passed random chance check!');
 
     // Pick a random user with enough points
     const eligibleUsers = activeUsers.filter((user) => {
       const points = this.getUserPoints(user.id);
-      return points >= 200; // Minimum 200 points to attempt redemption
+      return points >= 200;
     });
 
-    if (eligibleUsers.length === 0) return null;
+    console.log(`💰 Eligible users with 200+ points: ${eligibleUsers.length}`);
+    if (eligibleUsers.length === 0) {
+      console.warn('⚠️ No users with enough points');
+      return null;
+    }
 
     const user = eligibleUsers[Math.floor(Math.random() * eligibleUsers.length)];
     const userPoints = this.getUserPoints(user.id);
@@ -368,10 +354,12 @@ class ChannelPointsManager {
     let targetUser: string | undefined;
     let targetMessage: string | undefined;
 
-    if (['ghost_message', 'color_blast', 'super_like', 'personality_swap'].includes(redemption.id)) {
+    if (['color_blast', 'super_like', 'personality_swap', 'highlight_bomb'].includes(redemption.id)) {
       const otherUsers = activeUsers.filter((u) => u.id !== user.id);
       if (otherUsers.length > 0) {
-        targetUser = otherUsers[Math.floor(Math.random() * otherUsers.length)].username;
+        const randomUser = otherUsers[Math.floor(Math.random() * otherUsers.length)];
+        targetUser = randomUser.username;
+        console.log(`🎯 Targeting ${redemption.name} at user: ${targetUser}`);
       }
     }
 

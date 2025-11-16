@@ -78,8 +78,8 @@ class BitGiftingManager {
    * 2% chance per message of gifting
    */
   attemptAIGift(): BitGift | null {
-    // 2% chance to gift
-    if (Math.random() > 0.02) return null;
+    // 30% chance to gift (TESTING - increased from 2%)
+    if (Math.random() > 0.3) return null;
 
     const activeUsers = userPool.getActiveUsers();
     if (activeUsers.length < 2) return null;
@@ -222,6 +222,10 @@ class BitGiftingManager {
    */
   onGift(callback: (gift: BitGift) => void) {
     this.giftListeners.push(callback);
+  }
+
+  offGift(callback: (gift: BitGift) => void) {
+    this.giftListeners = this.giftListeners.filter((listener) => listener !== callback);
   }
 
   /**

@@ -7,6 +7,7 @@ import HeartLike from "./HeartLike";
 import { BadgeList } from "./badges/BadgeList";
 import { MessageReplyIndicator } from "./MessageReplyIndicator";
 import { ModeratorControls } from "./ModeratorControls";
+import { moderatorManager } from "@/lib/moderators";
 
 interface ChatPersonalityProps {
   message: Message;
@@ -16,9 +17,10 @@ interface ChatPersonalityProps {
   onJumpToMessage?: (messageId: string) => void;
   onViewHistory?: (username: string) => void;
   onViewProfile?: (username: string) => void;
+  isMostPopular?: boolean; // Only THE most liked message gets bubble treatment
 }
 
-export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile }: ChatPersonalityProps) => {
+export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile, isMostPopular = false }: ChatPersonalityProps) => {
   const personality = message.personality ? PERSONALITIES[message.personality] : null;
 
   const handleLike = () => {
@@ -41,12 +43,62 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
 
   const showTimestamps = settings?.showTimestamps !== false;
   
-  // Determine if this message should have a bubble (6+ likes)
-  const isPopular = (message.likes ?? 0) >= 6;
+  // Only THE single most liked message gets the bubble (passed from parent)
+  const isPopular = isMostPopular;
 
+  // Check if user is a moderator
+  const isModerator = moderatorManager.isModeratorByUsername(message.username);
+  
+  // Check if effect is still active
+  const isEffectActive = message.redemptionEffect && 
+                        message.effectExpiry && 
+                        message.effectExpiry > Date.now();
+  
+  // Apply channel point effect styling
+  let effectClasses = '';
+  let messageStyle: React.CSSProperties = {};
+  let usernameStyle: React.CSSProperties = { color: message.color };
+  let displayPersonality = personality;
+  
+  if (isEffectActive && message.redemptionEffect) {
+    switch (message.redemptionEffect.type) {
+      case 'highlight_bomb':
+        effectClasses = 'animate-pulse bg-gradient-to-r from-yellow-200 via-orange-200 to-yellow-200 border-4 border-yellow-500 shadow-2xl shadow-yellow-400/50 scale-105';
+        break;
+      case 'color_blast':
+        usernameStyle = { 
+          background: 'linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          fontWeight: 'bold',
+          fontSize: '1.2em'
+        };
+        break;
+      case 'personality_swap':
+        // Bold lettering effect - make entire message bold and larger
+        messageStyle = {
+          fontWeight: '900',
+          fontSize: '1.15em',
+          letterSpacing: '0.5px',
+          textShadow: '0 0 10px rgba(0,0,0,0.1)'
+        };
+        break;
+      case 'super_like':
+        // Shaking effect for super liked messages
+        effectClasses = 'animate-shake bg-gradient-to-r from-pink-100 to-purple-100 border-2 border-pink-400 shadow-lg';
+        break;
+    }
+  }
+  
+  // Twitch-style flat design - minimal padding, no rounded corners on normal messages
   const containerClasses = isPopular
-    ? `mb-2 bg-white rounded-[12px] card-shadow group hover:shadow-lg transition-all duration-300 px-4 py-3 animate-in fade-in slide-in-from-left-2 mx-2 md:mx-0`
-    : `mb-1 group hover:bg-gray-50/50 transition-all duration-200 px-3 py-2 mx-2 md:mx-0 md:px-2 md:py-1.5`;
+    ? `mb-2 bg-white rounded-lg border border-gray-200 group hover:shadow-md transition-all duration-300 px-3 py-2.5 animate-in fade-in slide-in-from-left-2 ${
+        isModerator ? 'border-2 border-yellow-400 shadow-sm shadow-yellow-100' : ''
+      } ${effectClasses}`
+    : `mb-0 group hover:bg-gray-100/30 transition-colors duration-150 px-2 py-1 ${
+        isModerator ? 'border-l-2 border-yellow-400' : ''
+      } ${effectClasses}`;
 
   return (
     <div className={containerClasses}>
@@ -60,28 +112,44 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
         />
       )}
 
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-1.5">
         <div className="flex-shrink-0">
-          {personality && (
-            <span className={`${isPopular ? 'text-xl' : 'text-base'} opacity-80 group-hover:opacity-100 transition-all duration-300`}>
-              {personality.emoji}
+          {displayPersonality && (
+            <span className={`${isPopular ? 'text-base' : 'text-sm'} opacity-70`}>
+              {displayPersonality.emoji}
             </span>
           )}
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex items-center gap-1 flex-wrap">
             {/* Badges */}
             {message.badges && message.badges.length > 0 && (
-              <BadgeList badges={message.badges} size="sm" maxDisplay={3} />
+              <BadgeList badges={message.badges} size="xs" maxDisplay={5} />
             )}
 
             <span
-              className="font-bold text-sm"
-              style={{ color: message.isModerator ? 'hsl(var(--primary))' : message.color }}
+              className="font-bold text-sm cursor-pointer hover:underline transition-all"
+              style={message.isModerator ? { color: 'hsl(var(--primary))' } : usernameStyle}
+              onClick={() => onViewProfile?.(message.username)}
+              title="View profile"
             >
               {message.username}
             </span>
+
+            {/* Bit Cheer Badge - Only show if > 0 bits */}
+            {message.bits && message.bits > 0 && (
+              <span 
+                className="text-[10px] px-1.5 py-0.5 text-white rounded font-bold animate-pulse"
+                style={{ 
+                  backgroundColor: (message as any).cheerTier?.badgeColor || '#9147ff',
+                  boxShadow: '0 0 8px rgba(145, 71, 255, 0.5)'
+                }}
+                title={`Cheered ${message.bits} bits`}
+              >
+                💎 {message.bits}
+              </span>
+            )}
 
             {message.isModerator && (
               <span className="text-[8px] px-1.5 py-0.5 bg-gradient-to-r from-primary to-secondary text-white rounded font-bold uppercase">
@@ -95,7 +163,7 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
               </span>
             )}
 
-            <span className="text-sm text-foreground break-words leading-relaxed">
+            <span className="text-sm text-foreground break-words leading-relaxed" style={messageStyle}>
               {renderEmotes(message.message)}
             </span>
           </div>
@@ -104,6 +172,19 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
           {message.threadCount && message.threadCount > 0 && (
             <div className="text-xs text-purple-600 font-semibold mt-1">
               💬 {message.threadCount} {message.threadCount === 1 ? 'reply' : 'replies'}
+            </div>
+          )}
+
+          {/* Channel Point Effect Indicator */}
+          {isEffectActive && message.redemptionEffect && (
+            <div className="text-[10px] text-purple-600 font-bold mt-1 flex items-center gap-1">
+              <span>⚡</span>
+              <span>
+                {message.redemptionEffect.type === 'highlight_bomb' && '💥 HIGHLIGHT BOMB ACTIVE'}
+                {message.redemptionEffect.type === 'color_blast' && '🎨 COLOR BLAST ACTIVE'}
+                {message.redemptionEffect.type === 'personality_swap' && '💪 BOLD BLAST ACTIVE'}
+                {message.redemptionEffect.type === 'super_like' && '⭐ SUPER LIKED!'}
+              </span>
             </div>
           )}
         </div>

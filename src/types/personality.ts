@@ -48,6 +48,16 @@ export interface Message {
   likes?: number;
   dislikes?: number;
   likedBy?: string[];
+  // Channel point effects
+  redemptionEffect?: {
+    type: 'highlight_bomb' | 'ghost_message' | 'color_blast' | 'super_like' | 'personality_swap';
+    userId: string;
+    targetUser?: string;
+    targetMessage?: string;
+    duration?: number;
+    data?: any;
+  };
+  effectExpiry?: number; // Timestamp when effect expires
   // Reply/Threading
   replyToId?: string;
   replyToUsername?: string;

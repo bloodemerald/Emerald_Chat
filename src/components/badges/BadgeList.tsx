@@ -55,7 +55,7 @@ export const BadgeList = memo(({
   const remainingCount = badges.length - maxDisplay;
 
   return (
-    <div className="inline-flex items-center gap-1">
+    <div className="inline-flex items-center gap-0.5 flex-shrink-0 max-w-fit">
       {displayBadges.map((badge) => (
         <Badge 
           key={badge.id} 
@@ -66,7 +66,7 @@ export const BadgeList = memo(({
       ))}
       {remainingCount > 0 && (
         <span 
-          className="text-xs text-muted-foreground font-semibold"
+          className="text-[9px] text-gray-400 font-semibold ml-0.5"
           title={`${remainingCount} more badge${remainingCount > 1 ? 's' : ''}`}
         >
           +{remainingCount}

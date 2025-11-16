@@ -233,8 +233,8 @@ class SubscriptionManager {
     // Find non-subscribers (lurkers who might subscribe)
     const lurkers = activeUsers.filter((u) => u.subscriberMonths === 0);
 
-    // 5% chance for a lurker to subscribe
-    if (lurkers.length > 0 && Math.random() < 0.05) {
+    // 40% chance for a lurker to subscribe (TESTING - increased from 5%)
+    if (lurkers.length > 0 && Math.random() < 0.4) {
       const user = lurkers[Math.floor(Math.random() * lurkers.length)];
 
       // Random tier (weighted towards tier 1)
@@ -249,8 +249,8 @@ class SubscriptionManager {
     // Check for resubs (subscribers who might resub)
     const subscribers = activeUsers.filter((u) => u.subscriberMonths > 0);
 
-    // 3% chance for a subscriber to resub
-    if (subscribers.length > 0 && Math.random() < 0.03) {
+    // 30% chance for a subscriber to resub (TESTING - increased from 3%)
+    if (subscribers.length > 0 && Math.random() < 0.3) {
       const user = subscribers[Math.floor(Math.random() * subscribers.length)];
 
       // Determine tier (usually stay same, but might upgrade)
@@ -275,8 +275,8 @@ class SubscriptionManager {
     // Find subscribers who might gift
     const subscribers = activeUsers.filter((u) => u.subscriberMonths > 0);
 
-    // 2% chance for a subscriber to gift a sub
-    if (subscribers.length > 0 && Math.random() < 0.02) {
+    // 20% chance for a subscriber to gift a sub (TESTING - increased from 2%)
+    if (subscribers.length > 0 && Math.random() < 0.2) {
       const gifter = subscribers[Math.floor(Math.random() * subscribers.length)];
 
       // Pick a random non-subscriber or low-month subscriber to receive

@@ -24,23 +24,30 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
 
   const joinedDaysAgo = Math.floor((Date.now() - user.createdAt) / (1000 * 60 * 60 * 24));
 
+  const headerGradient = isModerator
+    ? 'linear-gradient(135deg, rgba(16,185,129,0.95), rgba(5,150,105,0.9))'
+    : `linear-gradient(135deg, ${user.profileColor}dd, ${user.profileColor}88)`;
+
+  const featuredBadges = user.badges.slice(0, 3);
+
   return (
     <>
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
         onClick={onClose}
+        style={{ perspective: '1200px' }}
       >
         {/* Modal */}
         <div 
-          className="bg-white rounded-xl shadow-2xl max-w-md w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+          className="bg-white/95 backdrop-blur-xl border border-gray-200/70 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 transform-gpu transition-transform hover:-translate-y-1 hover:shadow-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header with gradient background */}
           <div 
-            className="relative h-32 bg-gradient-to-br from-purple-600 via-blue-600 to-cyan-600"
+            className="relative h-32"
             style={{
-              background: `linear-gradient(135deg, ${user.profileColor}dd, ${user.profileColor}88)`
+              background: headerGradient
             }}
           >
             <button
@@ -67,7 +74,7 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
           </div>
 
           {/* Content */}
-          <div className="pt-16 px-6 pb-6">
+          <div className="flex-1 overflow-y-auto pt-16 px-6 pb-6">
             {/* Username and Badges */}
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -112,39 +119,51 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
 
             {/* Stats Grid */}
             <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-blue-600 mb-1">
-                  <MessageSquare className="w-4 h-4" />
-                  <span className="text-xs font-semibold uppercase">Messages</span>
-                </div>
-                <p className="text-2xl font-bold text-blue-700">{user.messageCount}</p>
-              </div>
-
-              <div className="bg-gradient-to-br from-pink-50 to-pink-100 rounded-lg p-3">
-                <div className="flex items-center gap-2 text-pink-600 mb-1">
-                  <Heart className="w-4 h-4" />
-                  <span className="text-xs font-semibold uppercase">Likes Given</span>
-                </div>
-                <p className="text-2xl font-bold text-pink-700">{user.likesGiven}</p>
-              </div>
-
-              {user.subscriberMonths > 0 && (
-                <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-purple-600 mb-1">
-                    <Trophy className="w-4 h-4" />
-                    <span className="text-xs font-semibold uppercase">Subscriber</span>
+              {/* Messages */}
+              <div className="rounded-lg border border-gray-200/70 bg-white/80 px-3 py-2.5 flex flex-col gap-1 transition-all duration-150 hover:bg-white hover:shadow-sm">
+                <div className="flex items-center justify-between text-[11px] font-medium text-gray-500">
+                  <div className="flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Messages</span>
                   </div>
-                  <p className="text-2xl font-bold text-purple-700">{user.subscriberMonths}mo</p>
+                </div>
+                <p className="text-lg font-semibold text-gray-900 tabular-nums">{user.messageCount}</p>
+              </div>
+
+              {/* Likes Given */}
+              <div className="rounded-lg border border-gray-200/70 bg-white/80 px-3 py-2.5 flex flex-col gap-1 transition-all duration-150 hover:bg-white hover:shadow-sm">
+                <div className="flex items-center justify-between text-[11px] font-medium text-gray-500">
+                  <div className="flex items-center gap-1.5">
+                    <Heart className="w-3.5 h-3.5 text-rose-400" />
+                    <span>Likes given</span>
+                  </div>
+                </div>
+                <p className="text-lg font-semibold text-gray-900 tabular-nums">{user.likesGiven}</p>
+              </div>
+
+              {/* Subscriber Months */}
+              {user.subscriberMonths > 0 && (
+                <div className="rounded-lg border border-gray-200/70 bg-white/80 px-3 py-2.5 flex flex-col gap-1 transition-all duration-150 hover:bg-white hover:shadow-sm">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <Trophy className="w-3.5 h-3.5 text-purple-400" />
+                      <span>Subscriber</span>
+                    </div>
+                  </div>
+                  <p className="text-lg font-semibold text-gray-900 tabular-nums">{user.subscriberMonths}mo</p>
                 </div>
               )}
 
+              {/* Bits */}
               {user.bits > 0 && (
-                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-lg p-3">
-                  <div className="flex items-center gap-2 text-yellow-600 mb-1">
-                    <span className="text-sm">💎</span>
-                    <span className="text-xs font-semibold uppercase">Bits</span>
+                <div className="rounded-lg border border-gray-200/70 bg-white/80 px-3 py-2.5 flex flex-col gap-1 transition-all duration-150 hover:bg-white hover:shadow-sm">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-gray-500">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm">💎</span>
+                      <span>Bits</span>
+                    </div>
                   </div>
-                  <p className="text-2xl font-bold text-yellow-700">{user.bits.toLocaleString()}</p>
+                  <p className="text-lg font-semibold text-gray-900 tabular-nums">{user.bits.toLocaleString()}</p>
                 </div>
               )}
             </div>
@@ -179,6 +198,28 @@ export const UserProfileModal = ({ user, isOpen, onClose }: UserProfileModalProp
                 />
               </div>
             </div>
+
+            {/* Featured Badges Row - subtle 3D-inspired icons */}
+            {featuredBadges.length > 0 && (
+              <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <div className="flex gap-2 transform-gpu">
+                  {featuredBadges.map((badge) => (
+                    <div
+                      key={badge.id}
+                      className="w-8 h-8 rounded-full bg-white border border-gray-200 shadow-sm flex items-center justify-center text-sm transition-transform duration-150 hover:-translate-y-0.5"
+                      title={badge.name}
+                    >
+                      <span className="select-none">
+                        {badge.icon}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <span className="text-[11px] text-gray-400 font-medium">
+                  {user.badges.length} badge{user.badges.length === 1 ? '' : 's'}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>
