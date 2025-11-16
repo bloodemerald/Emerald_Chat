@@ -11,7 +11,7 @@ interface EmptyStateProps {
 export const EmptyState = ({ icon, title, description, action }: EmptyStateProps) => {
   return (
     <div className="flex flex-col items-center justify-center h-full p-8 text-center">
-      <div className="mb-4 text-accent/40">{icon}</div>
+      <div className="mb-4 text-accent/40 p-6 rounded-2xl bg-gradient-to-br from-gray-50 to-gray-100/50 shadow-[inset_0_2px_4px_rgba(255,255,255,0.9),inset_0_-2px_4px_rgba(0,0,0,0.05),0_1px_2px_rgba(0,0,0,0.05)]">{icon}</div>
       <h3 className="text-base font-bold text-foreground mb-2 uppercase tracking-wide">{title}</h3>
       {description && <p className="text-sm text-muted-foreground mb-4 max-w-md leading-relaxed">{description}</p>}
       {action && <div>{action}</div>}
