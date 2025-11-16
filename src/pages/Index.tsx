@@ -36,8 +36,6 @@ import {
   calculateMessageDelay,
   shouldAddLurkerJoin,
   shouldCreateReactionChain,
-  shouldAILikeMessage,
-  generateAILikes,
 } from "@/lib/chatFlow";
 import { isOllamaAvailable, generateWithOllama, generateTextWithOllama } from "@/lib/localAI";
 import { userLifecycle } from "@/lib/userLifecycle";
@@ -338,14 +336,9 @@ const Index = () => {
 
       // Allow user to select specific window/app, not just whole screen
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          // Don't specify displaySurface - let user choose monitor, window, or tab
-          cursor: "never" as const, // Don't include cursor in capture
-        },
-        audio: false, // Don't capture audio
-        // @ts-expect-error preferCurrentTab is a Chrome-specific extension
-        preferCurrentTab: false, // Don't default to current tab
-      });
+        video: true,
+        audio: false,
+      } as any);
 
       // Store the stream for continuous captures
       setMediaStream(stream);

@@ -5,33 +5,39 @@ import type { Database } from './types';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Log the loaded values for debugging (without exposing sensitive data)
-console.log('SUPABASE_URL:', SUPABASE_URL ? 'Loaded' : 'Missing');
-console.log('SUPABASE_PUBLISHABLE_KEY:', SUPABASE_PUBLISHABLE_KEY ? 'Loaded (***' + SUPABASE_PUBLISHABLE_KEY.slice(-10) + ')' : 'Missing');
-
-// Validate environment variables
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    'Missing Supabase environment variables. Please ensure your .env file contains:\n' +
-    'VITE_SUPABASE_URL=your_supabase_url\n' +
-    'VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key'
-  );
-}
-
-// Validate URL format
-if (!SUPABASE_URL.startsWith('http://') && !SUPABASE_URL.startsWith('https://')) {
-  throw new Error(
-    `Invalid SUPABASE_URL format: "${SUPABASE_URL}". Must start with http:// or https://`
-  );
-}
-
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+export const supabase = (() => {
+  // Validate environment variables
+  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+    console.warn(
+      'Missing Supabase environment variables. Cloud AI features will be disabled. ' +
+      'To enable cloud AI, add these to your .env file:\n' +
+      'VITE_SUPABASE_URL=your_supabase_url\n' +
+      'VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key'
+    );
+    // Return a mock client that will gracefully handle missing Supabase
+    return {
+      functions: {
+        invoke: async () => ({ data: null, error: { message: 'Supabase not configured' } })
+      }
+    };
   }
-});
+
+  // Validate URL format
+  if (!SUPABASE_URL.startsWith('http://') && !SUPABASE_URL.startsWith('https://')) {
+    throw new Error(
+      `Invalid SUPABASE_URL format: "${SUPABASE_URL}". Must start with http:// or https://`
+    );
+  }
+
+  // Return the real Supabase client
+  return createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    }
+  });
+})();
