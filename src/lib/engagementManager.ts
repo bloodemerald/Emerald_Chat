@@ -107,9 +107,9 @@ class EngagementManager {
    * Start AI-driven events
    */
   private startAIEvents() {
-    // Check for AI bit cheers every 15-30 seconds (slower, more scarce)
+    // Check for AI bit cheers every 10-20 seconds (slightly more active)
     const scheduleNextCheerCheck = () => {
-      const delay = 15000 + Math.random() * 15000; // 15-30s
+      const delay = 10000 + Math.random() * 10000; // 10-20s
       this.bitCheerCheckInterval = setTimeout(() => {
         const activeUsers = userPool.getActiveUsers();
         if (activeUsers.length > 0) {
@@ -121,9 +121,9 @@ class EngagementManager {
     };
     scheduleNextCheerCheck();
 
-    // Check for AI bit gifts every 30-60 seconds (slower, more scarce)
+    // Check for AI bit gifts every 20-40 seconds (slightly more active)
     const scheduleNextGiftCheck = () => {
-      const delay = 30000 + Math.random() * 30000; // 30-60s
+      const delay = 20000 + Math.random() * 20000; // 20-40s
       this.bitGiftCheckInterval = setTimeout(() => {
         bitGifting.attemptAIGift();
         scheduleNextGiftCheck();
@@ -131,9 +131,9 @@ class EngagementManager {
     };
     scheduleNextGiftCheck();
 
-    // Check for AI subscriptions every 60-120 seconds (slower)
+    // Check for AI subscriptions every 45-90 seconds (slightly more active)
     const scheduleNextSubCheck = () => {
-      const delay = 60000 + Math.random() * 60000; // 60-120s
+      const delay = 45000 + Math.random() * 45000; // 45-90s
       this.subscriptionCheckInterval = setTimeout(() => {
         // Try new sub or resub
         subscriptions.attemptAISubscription();
@@ -142,9 +142,9 @@ class EngagementManager {
     };
     scheduleNextSubCheck();
 
-    // Check for AI gift subs every 90-150 seconds (slower)
+    // Check for AI gift subs every 75-120 seconds (slightly more active)
     const scheduleNextGiftSubCheck = () => {
-      const delay = 90000 + Math.random() * 60000; // 90-150s
+      const delay = 75000 + Math.random() * 45000; // 75-120s
       setTimeout(() => {
         subscriptions.attemptAIGiftSub();
         scheduleNextGiftSubCheck();

@@ -132,8 +132,8 @@ class BitCheeringManager {
    * Low probability on each check so bits feel scarce
    */
   attemptAICheer(user: ChatUser, message?: string): BitCheer | null {
-    // 20% chance to cheer on each scheduled check
-    if (Math.random() > 0.2) return null;
+    // ~30% chance to cheer on each scheduled check (slightly more active)
+    if (Math.random() > 0.3) return null;
 
     // Check if user has bits
     if (user.bits < 1) return null;

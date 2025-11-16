@@ -20,6 +20,7 @@ import { RateLimiter } from "@/lib/debounce";
 import {
   MESSAGE_FREQUENCY_DEFAULT,
   RECENT_MESSAGES_LIMIT,
+  MAX_DISPLAY_MESSAGES,
   MODERATOR_COLOR,
   POPOUT_WIDTH,
   POPOUT_HEIGHT,
@@ -158,6 +159,51 @@ const Index = () => {
 
     const handleCheer = (cheer: BitCheer) => {
       updateBitsForUser(cheer.username);
+
+      // Apply a bit-driven "super like" effect to the cheerer's most recent message
+      setMessages((current) => {
+        if (current.length === 0) return current;
+
+        // Find the most recent message from this user
+        const reversedIndex = [...current]
+          .reverse()
+          .findIndex((m) => m.username === cheer.username);
+
+        if (reversedIndex === -1) return current;
+
+        const targetIndex = current.length - 1 - reversedIndex;
+        const target = current[targetIndex];
+
+        const extraLikes = Math.max(1, Math.round(cheer.amount / 100));
+        const effectDuration = 15000; // 15s shake window so it's noticeable
+
+        const effect = {
+          type: 'super_like' as const,
+          userId: cheer.userId,
+          targetUser: cheer.username,
+          targetMessage: target.id,
+          duration: effectDuration,
+          data: { likes: extraLikes },
+        };
+
+        return current.map((msg, idx) => {
+          if (idx !== targetIndex) return msg;
+
+          const currentLikes = msg.likes ?? 0;
+          const currentLikedBy = msg.likedBy ?? [];
+          const nextLikedBy = currentLikedBy.includes(cheer.username)
+            ? currentLikedBy
+            : [...currentLikedBy, cheer.username];
+
+          return {
+            ...msg,
+            likes: currentLikes + extraLikes,
+            likedBy: nextLikedBy,
+            redemptionEffect: effect,
+            effectExpiry: Date.now() + effectDuration,
+          };
+        });
+      });
     };
 
     const handleGift = (gift: BitGift) => {
@@ -430,10 +476,10 @@ const Index = () => {
     handleClearMessages
   );
 
-  // Limit messages to prevent memory issues
+  // Limit messages to prevent memory issues (keep last 200 messages)
   useEffect(() => {
-    if (messages.length > RECENT_MESSAGES_LIMIT) {
-      setMessages(prev => prev.slice(-RECENT_MESSAGES_LIMIT));
+    if (messages.length > MAX_DISPLAY_MESSAGES) {
+      setMessages(prev => prev.slice(-MAX_DISPLAY_MESSAGES));
     }
   }, [messages.length]);
 

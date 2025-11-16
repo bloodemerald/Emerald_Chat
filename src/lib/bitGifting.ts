@@ -79,14 +79,14 @@ class BitGiftingManager {
    * 2% chance per message of gifting
    */
   attemptAIGift(): BitGift | null {
-    // 20% chance to gift on each scheduled check
-    if (Math.random() > 0.2) return null;
+    // ~35% chance to gift on each scheduled check (slightly more generous)
+    if (Math.random() > 0.35) return null;
 
     const activeUsers = userPool.getActiveUsers();
     if (activeUsers.length < 2) return null;
 
-    // Find moderators with 500+ bits who can gift
-    const eligibleGifters = activeUsers.filter((u) => u.bits >= 500 && moderatorManager.isModerator(u.id));
+    // Find moderators with 300+ bits who can gift (more mods eligible)
+    const eligibleGifters = activeUsers.filter((u) => u.bits >= 300 && moderatorManager.isModerator(u.id));
     if (eligibleGifters.length === 0) return null;
 
     const gifter = eligibleGifters[Math.floor(Math.random() * eligibleGifters.length)];

@@ -8,6 +8,7 @@ export const SCREENSHOT_FORMAT = 'image/jpeg'; // JPEG for Ollama compatibility
 
 // Chat Configuration
 export const RECENT_MESSAGES_LIMIT = 10; // Number of messages sent to AI for context
+export const MAX_DISPLAY_MESSAGES = 200; // Maximum messages to keep in chat (for performance)
 export const MESSAGE_FREQUENCY_MIN = 1; // Minimum seconds between messages (increased activity)
 export const MESSAGE_FREQUENCY_MAX = 6; // Maximum seconds between messages (increased activity)
 export const MESSAGE_FREQUENCY_DEFAULT = 3; // Default seconds between messages (increased activity)
