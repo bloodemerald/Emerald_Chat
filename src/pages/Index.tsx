@@ -77,6 +77,7 @@ const Index = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [detectedContent, setDetectedContent] = useState<string>("");
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const captureIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -106,6 +107,35 @@ const Index = () => {
   const messageQueueRef = useRef<Array<{ message: string; personality: PersonalityType }>>([]);
   const retryCountRef = useRef(0);
   const isWaitingForAIRef = useRef(false);
+
+  // Extract content keywords from AI messages for context
+  const extractContentFromMessages = useCallback((messages: Array<{ message: string; personality: PersonalityType }>): string => {
+    // Look for game names, app names, or specific content identifiers
+    const contentPatterns = [
+      /\b(\w+(?:\s+\w+)?(?:\s+\d+)?)\s+(working|running|loading|crashed|failed|success|error|bug|fix|update|patch)\b/gi,
+      /\b(localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)\b/g,
+      /\b(\w+(?:\s+\w+)?)\s+(game|app|software|program|tool|utility)\b/gi,
+      /\b(visual\s+studio|vs\s+code|intellij|eclipse|notepad\+\+|sublime|atom|vim|emacs)\b/gi,
+      /\b(chrome|firefox|safari|edge|browser|web\s+page|website)\b/gi,
+      /\b(windows|mac|linux|ubuntu|terminal|command\s+line|shell|bash|powershell)\b/gi,
+      /\b(react|vue|angular|javascript|typescript|python|java|cpp|c\+\+|html|css|node|npm)\b/gi,
+      /\b(league|valorant|csgo|minecraft|fortnite|apex|overwatch|dota|lol|wow|fifa|nba|nfl)\b/gi,
+    ];
+
+    for (const message of messages) {
+      for (const pattern of contentPatterns) {
+        const matches = message.message.match(pattern);
+        if (matches && matches.length > 0) {
+          // Clean up and return the first meaningful match
+          const content = matches[0].replace(/\b(working|running|loading|crashed|failed|success|error|bug|fix|update|patch|game|app|software|program|tool|utility)\b/gi, '').trim();
+          if (content.length > 2 && content.length < 50) {
+            return content;
+          }
+        }
+      }
+    }
+    return "";
+  }, []);
 
   // Load saved data on mount
   useEffect(() => {
@@ -696,6 +726,14 @@ Rules:
 
         if (data?.messages && Array.isArray(data.messages)) {
           console.log(`✅ AI generated ${data.messages.length} messages`);
+          
+          // Extract content from AI messages for context
+          const extractedContent = extractContentFromMessages(data.messages);
+          if (extractedContent && extractedContent !== detectedContent) {
+            setDetectedContent(extractedContent);
+            console.log(`🎯 Detected content: ${extractedContent}`);
+          }
+          
           messageQueueRef.current.push(...data.messages);
           retryCountRef.current = 0;
           isWaitingForAIRef.current = false;
