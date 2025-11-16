@@ -105,7 +105,10 @@ export async function generateWithOllama({
   model?: string;
   ollamaApiUrl?: string;
   batchSize?: number;
-}): Promise<{ messages: Array<{ message: string; personality: PersonalityType }> }> {
+}): Promise<{ 
+  messages: Array<{ message: string; personality: PersonalityType }>;
+  detectedContent?: string;
+ }> {
   try {
     const baseUrl = getOllamaBaseUrl(ollamaApiUrl);
 
@@ -119,13 +122,15 @@ export async function generateWithOllama({
     console.log("🎮 Sending to Ollama with model:", model);
 
     // Enhanced prompt for specific, contextual reactions
-    const visionPrompt = `You are ${batchSize} different Twitch viewers. Write ${batchSize} SHORT chat messages about this screenshot.
+    const visionPrompt = `You are ${batchSize} different viewers watching screen content. Write ${batchSize} SHORT chat messages about what you see.
 
 CRITICAL RULES:
 - Output ONLY ${batchSize} chat messages, one per line
 - Each message MUST be under 100 characters
 - NO descriptions, NO explanations, NO paragraphs
-- Write like REAL Twitch chat - casual, imperfect, short
+- Write like REAL stream chat - casual, imperfect, short
+- If you can identify what application, game, or content is being shown, reference it naturally
+- React to what's happening on screen, not the streaming platform
 
 GOOD EXAMPLES:
 "that syntax error lol"
