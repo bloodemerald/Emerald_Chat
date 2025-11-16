@@ -58,6 +58,9 @@ export interface Message {
   // User metadata
   subscriberMonths?: number;
   bits?: number;
+  // Bit cheering
+  cheerTier?: import('../lib/bitCheering').BitTier;
+  cheerAnimation?: string;
 }
 
 export interface ChatSettings {

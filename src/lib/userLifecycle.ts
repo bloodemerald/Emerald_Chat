@@ -15,14 +15,14 @@ export class UserLifecycleManager {
   start(onViewerCountChange?: (count: number) => void) {
     this.onViewerCountChange = onViewerCountChange || null;
     
-    // Initial burst: join 10-20 users immediately
-    const initialUsers = 10 + Math.floor(Math.random() * 10);
+    // Initial burst: join 2-3 users immediately (more realistic small stream start)
+    const initialUsers = 2 + Math.floor(Math.random() * 2); // 2-3 users
     for (let i = 0; i < initialUsers; i++) {
       userPool.joinRandomUser();
     }
-    
-    // Activate some of the lurkers
-    const initialActive = 3 + Math.floor(Math.random() * 5);
+
+    // Activate some of the lurkers (0-1 active chatters)
+    const initialActive = Math.random() > 0.5 ? 1 : 0; // 0-1 active chatters
     for (let i = 0; i < initialActive; i++) {
       userPool.activateLurker();
     }
