@@ -9,9 +9,13 @@ import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
 import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
+import { PollCreator } from "@/components/PollCreator";
+import { PollMessage } from "@/components/PollMessage";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
+import { Poll } from "@/types/polls";
+import { pollVoting } from "@/lib/pollVoting";
 import { selectPersonality, PERSONALITIES } from "@/lib/personalities";
 import { useChatSync } from "@/hooks/useChatSync";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -116,6 +120,11 @@ const Index = () => {
   const [isLofiMode, setIsLofiMode] = useState(false);
   const [screenshotHistory, setScreenshotHistory] = useState<ScreenshotHistory>(() => loadScreenshotHistory());
   const [showScreenshotTimeline, setShowScreenshotTimeline] = useState(false);
+
+  // Poll system state
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [userVotes, setUserVotes] = useState<Map<string, string>>(new Map()); // pollId -> optionId
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -326,6 +335,11 @@ const Index = () => {
       );
     });
 
+    // Start poll voting system (AI users voting in polls)
+    pollVoting.start((pollId, username, optionId) => {
+      handleAIVote(pollId, username, optionId);
+    });
+
     console.log('🎬 User simulation started');
 
     // Join moderators first (high priority)
@@ -335,6 +349,7 @@ const Index = () => {
       userLifecycle.stop();
       retroactiveLikes.stop();
       staggeredLikes.stop();
+      pollVoting.stop();
       moderatorManager.reset();
       console.log('🛑 User simulation stopped');
     };
@@ -1219,6 +1234,91 @@ Rules:
     }
   }, []);
 
+  // Poll handlers
+  const handleCreatePoll = useCallback((poll: Poll) => {
+    setPolls((prev) => [...prev, poll]);
+    toast.success(`Poll created: ${poll.question}`);
+
+    // Schedule AI votes for this poll
+    pollVoting.scheduleVotesForPoll(poll);
+
+    // Set up timer to end poll
+    const timeout = setTimeout(() => {
+      handleEndPoll(poll.id);
+    }, poll.duration * 1000);
+
+    return () => clearTimeout(timeout);
+  }, []);
+
+  const handleVote = useCallback((pollId: string, optionId: string) => {
+    setPolls((prev) =>
+      prev.map((poll) => {
+        if (poll.id !== pollId) return poll;
+        if (poll.status === 'ended') return poll;
+
+        return {
+          ...poll,
+          options: poll.options.map((option) =>
+            option.id === optionId
+              ? {
+                  ...option,
+                  votes: option.votes + 1,
+                  votedBy: [...option.votedBy, 'YOU'],
+                }
+              : option
+          ),
+          totalVotes: poll.totalVotes + 1,
+        };
+      })
+    );
+
+    // Track user vote
+    setUserVotes((prev) => new Map(prev).set(pollId, optionId));
+  }, []);
+
+  const handleAIVote = useCallback((pollId: string, username: string, optionId: string) => {
+    setPolls((prev) =>
+      prev.map((poll) => {
+        if (poll.id !== pollId) return poll;
+        if (poll.status === 'ended') return poll;
+
+        return {
+          ...poll,
+          options: poll.options.map((option) =>
+            option.id === optionId
+              ? {
+                  ...option,
+                  votes: option.votes + 1,
+                  votedBy: [...option.votedBy, username],
+                }
+              : option
+          ),
+          totalVotes: poll.totalVotes + 1,
+        };
+      })
+    );
+  }, []);
+
+  const handleEndPoll = useCallback((pollId: string) => {
+    setPolls((prev) =>
+      prev.map((poll) => {
+        if (poll.id !== pollId) return poll;
+
+        const winningOption = poll.options.reduce((max, option) =>
+          option.votes > max.votes ? option : max
+        );
+
+        return {
+          ...poll,
+          status: 'ended' as const,
+          winnerId: winningOption.id,
+        };
+      })
+    );
+
+    pollVoting.cancelVotesForPoll(pollId);
+  }, []);
+
   // Send moderator message
   const sendModeratorMessage = (text: string) => {
     if (!text.trim()) return;
@@ -1398,6 +1498,7 @@ Rules:
             isLive={isGenerating}
             onOpenUserList={() => setShowUserList(true)}
             onOpenTimeline={() => setShowScreenshotTimeline(true)}
+            onCreatePoll={() => setShowPollCreator(true)}
             frameCount={screenshotHistory.frames.length}
           />
 
@@ -1436,33 +1537,66 @@ Rules:
             ) : (
               (() => {
                 // Find the message with the most likes for bubble effect
-                const mostLikedMessage = messages.reduce((max, msg) => 
+                const mostLikedMessage = messages.reduce((max, msg) =>
                   (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
                 , messages[0]);
-                
-                return messages.map((msg) => (
-                  <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
-                    <ChatPersonality
-                      message={msg}
-                      settings={settings}
-                      isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
-                      isLofiMode={isLofiMode}
-                      onLike={(messageId) => {
-                        setMessages((prev) =>
-                          prev.map((m) =>
-                            m.id === messageId
-                              ? { ...m, likes: (m.likes ?? 0) + 1 }
-                              : m
-                          )
-                        );
-                      }}
-                      onReply={handleReply}
-                      onJumpToMessage={handleJumpToMessage}
-                      onViewHistory={handleViewHistory}
-                      onViewProfile={handleViewProfile}
-                    />
-                  </div>
-                ));
+
+                // Combine messages and polls, sorted by timestamp
+                const messagesWithTimestamps = messages.map(msg => ({
+                  type: 'message' as const,
+                  data: msg,
+                  timestamp: new Date(msg.timestamp).getTime() || 0,
+                }));
+
+                const pollsWithTimestamps = polls.map(poll => ({
+                  type: 'poll' as const,
+                  data: poll,
+                  timestamp: poll.createdAt,
+                }));
+
+                const combined = [...messagesWithTimestamps, ...pollsWithTimestamps]
+                  .sort((a, b) => a.timestamp - b.timestamp);
+
+                return combined.map((item) => {
+                  if (item.type === 'message') {
+                    const msg = item.data;
+                    return (
+                      <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
+                        <ChatPersonality
+                          message={msg}
+                          settings={settings}
+                          isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
+                          isLofiMode={isLofiMode}
+                          onLike={(messageId) => {
+                            setMessages((prev) =>
+                              prev.map((m) =>
+                                m.id === messageId
+                                  ? { ...m, likes: (m.likes ?? 0) + 1 }
+                                  : m
+                              )
+                            );
+                          }}
+                          onReply={handleReply}
+                          onJumpToMessage={handleJumpToMessage}
+                          onViewHistory={handleViewHistory}
+                          onViewProfile={handleViewProfile}
+                        />
+                      </div>
+                    );
+                  } else {
+                    const poll = item.data;
+                    return (
+                      <div key={poll.id}>
+                        <PollMessage
+                          poll={poll}
+                          onVote={handleVote}
+                          hasVoted={userVotes.has(poll.id)}
+                          userVote={userVotes.get(poll.id)}
+                        />
+                      </div>
+                    );
+                  }
+                });
               })()
             )}
           </div>
@@ -1530,6 +1664,13 @@ Rules:
           onClose={() => setShowScreenshotTimeline(false)}
         />
       )}
+
+      {/* Poll Creator */}
+      <PollCreator
+        isOpen={showPollCreator}
+        onClose={() => setShowPollCreator(false)}
+        onCreate={handleCreatePoll}
+      />
     </div>
   );
 };
