@@ -19,9 +19,25 @@ interface ChatPersonalityProps {
   onViewProfile?: (username: string) => void;
   isMostPopular?: boolean; // Only THE most liked message gets bubble treatment
   isLofiMode?: boolean;
+  isNew?: boolean; // Whether this is a newly added message (for entrance animation)
+  isHighlighted?: boolean; // Whether this message should be highlighted (e.g., after jump-to)
+  animationStyle?: 'bottom' | 'right' | 'left'; // Slide-in animation direction
 }
 
-export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile, isMostPopular = false, isLofiMode = false }: ChatPersonalityProps) => {
+export const ChatPersonality = memo(({
+  message,
+  settings,
+  onLike,
+  onReply,
+  onJumpToMessage,
+  onViewHistory,
+  onViewProfile,
+  isMostPopular = false,
+  isLofiMode = false,
+  isNew = false,
+  isHighlighted = false,
+  animationStyle = 'bottom'
+}: ChatPersonalityProps) => {
   const personality = message.personality ? PERSONALITIES[message.personality] : null;
 
   const handleLike = () => {
@@ -92,12 +108,25 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
     }
   }
   
+  // Animation classes based on props
+  const getAnimationClass = () => {
+    if (!isNew) return '';
+    switch (animationStyle) {
+      case 'right': return 'chat-message-slide-right';
+      case 'left': return 'chat-message-slide-left';
+      default: return 'chat-message-enter';
+    }
+  };
+
+  const highlightClass = isHighlighted ? 'message-jump-highlight' : (isNew ? 'message-new-highlight' : '');
+  const animationClass = getAnimationClass();
+
   // Twitch-style flat design - minimal padding, no rounded corners on normal messages
   const containerClasses = isPopular
-    ? `mb-2 ${isLofiMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'} rounded-lg border group hover:shadow-md transition-all duration-300 px-3 py-2.5 animate-in fade-in slide-in-from-left-2 ${
+    ? `mb-2 ${isLofiMode ? 'bg-slate-800 border-slate-600' : 'bg-white border-gray-200'} rounded-lg border group hover:shadow-md transition-all duration-300 px-3 py-2.5 ${animationClass} ${highlightClass} ${
         isModerator ? 'border-2 border-yellow-400 shadow-sm shadow-yellow-100' : ''
       } ${effectClasses}`
-    : `mb-0 group ${isLofiMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-100/30'} transition-colors duration-150 px-2 py-1 ${
+    : `mb-0 group ${isLofiMode ? 'hover:bg-slate-800/50' : 'hover:bg-gray-100/30'} transition-colors duration-150 px-2 py-1 ${animationClass} ${highlightClass} ${
         isModerator ? 'border-l-2 border-yellow-400' : ''
       } ${effectClasses}`;
 
