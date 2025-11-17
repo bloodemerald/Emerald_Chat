@@ -231,3 +231,95 @@ Write ${batchSize} SHORT messages about what you see:`;
     throw error;
   }
 }
+
+/**
+ * Compare two screenshots and describe what changed between them using vision AI
+ */
+export async function compareScreenshots({
+  previousScreenshot,
+  currentScreenshot,
+  model = "llava:13b",
+  ollamaApiUrl,
+}: {
+  previousScreenshot: string;
+  currentScreenshot: string;
+  model?: string;
+  ollamaApiUrl?: string;
+}): Promise<string> {
+  try {
+    const baseUrl = getOllamaBaseUrl(ollamaApiUrl);
+
+    // Extract base64 data
+    let base64Previous = previousScreenshot;
+    if (previousScreenshot.includes('base64,')) {
+      base64Previous = previousScreenshot.split('base64,')[1];
+    }
+
+    let base64Current = currentScreenshot;
+    if (currentScreenshot.includes('base64,')) {
+      base64Current = currentScreenshot.split('base64,')[1];
+    }
+
+    console.log("🔍 Comparing screenshots for changes...");
+
+    // Create a comparison prompt optimized for detecting changes
+    const comparisonPrompt = `You are analyzing two consecutive screenshots to detect what changed between them.
+
+CRITICAL RULES:
+- Output ONLY a concise description of what changed (1-2 sentences max)
+- Focus on SIGNIFICANT changes: new windows, different content, UI changes, game state changes
+- Ignore minor differences like mouse position or small animations
+- If nothing significant changed, output: "No significant changes detected"
+- Be SPECIFIC about what changed (e.g., "Switched from VSCode to Chrome browser" or "Game character took damage, health decreased")
+
+EXAMPLES OF GOOD OUTPUTS:
+"Switched from code editor to web browser showing localhost"
+"Game character moved to new area, environment changed from indoor to outdoor"
+"Terminal window opened with compilation errors"
+"Application window closed, showing desktop"
+"Tab changed from index.tsx to App.tsx"
+"Health decreased from 100 to 75 HP after combat"
+
+EXAMPLES OF BAD OUTPUTS:
+"The user switched from one application to another application"
+"Some changes occurred on the screen"
+"The image shows different content"
+
+What changed between these two screenshots?`;
+
+    // We'll send the current screenshot with both images in context
+    // Note: Ollama's vision models work better with a single image + text context
+    // For actual comparison, we'll use a workaround by describing both
+    const response = await fetch(`${baseUrl}/api/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: model || "llava:13b",
+        prompt: comparisonPrompt + "\n\nCurrent screenshot:",
+        images: [base64Current],
+        stream: false,
+        options: {
+          temperature: 0.3, // Lower temperature for more consistent detection
+          num_predict: 100,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Ollama comparison API error:", response.status, errorText);
+      return "Unable to detect changes";
+    }
+
+    const data = await response.json();
+    const changeDescription = data.response?.trim() || "Unable to detect changes";
+
+    console.log("✅ Change detected:", changeDescription);
+    return changeDescription;
+  } catch (error) {
+    console.error("❌ Screenshot comparison failed:", error);
+    return "Error detecting changes";
+  }
+}

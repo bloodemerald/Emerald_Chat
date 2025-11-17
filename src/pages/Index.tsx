@@ -8,6 +8,7 @@ import { NoChatEmptyState } from "@/components/EmptyState";
 import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
+import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
@@ -38,7 +39,7 @@ import {
   shouldAddLurkerJoin,
   shouldCreateReactionChain,
 } from "@/lib/chatFlow";
-import { isOllamaAvailable, generateWithOllama, generateTextWithOllama } from "@/lib/localAI";
+import { isOllamaAvailable, generateWithOllama, generateTextWithOllama, compareScreenshots } from "@/lib/localAI";
 import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
 import { staggeredLikes } from "@/lib/staggeredLikes";
@@ -50,6 +51,13 @@ import { subscriptions } from "@/lib/subscriptions";
 import { engagementManager } from "@/lib/engagementManager";
 import { moderatorManager } from "@/lib/moderators";
 import { NotificationOverlay } from "@/components/notifications/NotificationOverlay";
+import {
+  loadScreenshotHistory,
+  addScreenshotFrame,
+  getPreviousFrame,
+  calculateVisualDifference,
+  ScreenshotHistory
+} from "@/lib/screenshotHistory";
 
 const DEFAULT_SETTINGS: ChatSettings = {
   personalities: {
@@ -106,6 +114,8 @@ const Index = () => {
   const [showUserHistory, setShowUserHistory] = useState(false);
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const [isLofiMode, setIsLofiMode] = useState(false);
+  const [screenshotHistory, setScreenshotHistory] = useState<ScreenshotHistory>(() => loadScreenshotHistory());
+  const [showScreenshotTimeline, setShowScreenshotTimeline] = useState(false);
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -1051,11 +1061,52 @@ Rules:
     const activeStream = mediaStreamRef.current;
     if (activeStream) {
       const latestScreenshotRef = { current: screenshot };
-      
+
       captureIntervalRef.current = setInterval(async () => {
         const frame = await captureFrameFromStream(activeStream);
         if (frame) {
           latestScreenshotRef.current = frame;
+
+          // Track screenshot changes in history
+          setScreenshotHistory(prevHistory => {
+            const previousFrame = getPreviousFrame(prevHistory);
+
+            // Compare with previous frame if it exists
+            if (previousFrame) {
+              // Calculate visual difference and get AI description of changes
+              calculateVisualDifference(previousFrame.image, frame).then(async (changeScore) => {
+                console.log(`📊 Visual change score: ${changeScore}%`);
+
+                // Only get AI description if change is significant (> 5%)
+                let changeDescription = undefined;
+                if (changeScore > 5 && settings.aiProvider === 'local') {
+                  try {
+                    changeDescription = await compareScreenshots({
+                      previousScreenshot: previousFrame.image,
+                      currentScreenshot: frame,
+                      model: settings.ollamaModel || 'llava:13b',
+                      ollamaApiUrl: settings.ollamaApiUrl,
+                    });
+                    console.log(`🔍 Change detected: ${changeDescription}`);
+                  } catch (error) {
+                    console.error('Failed to compare screenshots:', error);
+                  }
+                }
+
+                // Add frame to history with change metadata
+                setScreenshotHistory(history =>
+                  addScreenshotFrame(history, frame, detectedContent, changeDescription, changeScore)
+                );
+              });
+
+              // Return current history while async comparison runs
+              return prevHistory;
+            } else {
+              // First frame, no comparison needed
+              return addScreenshotFrame(prevHistory, frame, detectedContent);
+            }
+          });
+
           // Update screenshot state WITHOUT triggering auto-start
           setScreenshot(frame);
           console.log("📸 Screen refreshed for AI context");
@@ -1342,10 +1393,12 @@ Rules:
           }`}
         >
           {/* Header */}
-          <ChatHeader 
-            viewerCount={viewerCount} 
+          <ChatHeader
+            viewerCount={viewerCount}
             isLive={isGenerating}
             onOpenUserList={() => setShowUserList(true)}
+            onOpenTimeline={() => setShowScreenshotTimeline(true)}
+            frameCount={screenshotHistory.frames.length}
           />
 
           {/* Settings Panel */}
@@ -1469,6 +1522,14 @@ Rules:
           setSelectedUser(null);
         }}
       />
+
+      {/* Screenshot Timeline */}
+      {showScreenshotTimeline && (
+        <ScreenshotTimeline
+          history={screenshotHistory}
+          onClose={() => setShowScreenshotTimeline(false)}
+        />
+      )}
     </div>
   );
 };
