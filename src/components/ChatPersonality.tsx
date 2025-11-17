@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { Reply, Shield } from "lucide-react";
+import { Reply, Shield, Pin } from "lucide-react";
 import { Message, ChatSettings } from "@/types/personality";
 import { PERSONALITIES } from "@/lib/personalities";
 import { renderEmotes } from "@/lib/emotes";
@@ -17,11 +17,12 @@ interface ChatPersonalityProps {
   onJumpToMessage?: (messageId: string) => void;
   onViewHistory?: (username: string) => void;
   onViewProfile?: (username: string) => void;
+  onPin?: (messageId: string) => void;
   isMostPopular?: boolean; // Only THE most liked message gets bubble treatment
   isLofiMode?: boolean;
 }
 
-export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile, isMostPopular = false, isLofiMode = false }: ChatPersonalityProps) => {
+export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJumpToMessage, onViewHistory, onViewProfile, onPin, isMostPopular = false, isLofiMode = false }: ChatPersonalityProps) => {
   const personality = message.personality ? PERSONALITIES[message.personality] : null;
 
   const handleLike = () => {
@@ -33,6 +34,12 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
   const handleReply = () => {
     if (onReply) {
       onReply(message.id, message.username, message.message);
+    }
+  };
+
+  const handlePin = () => {
+    if (onPin) {
+      onPin(message.id);
     }
   };
 
@@ -208,6 +215,22 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
             </ModeratorControls>
           )}
 
+          {/* Pin button */}
+          {onPin && (
+            <button
+              onClick={handlePin}
+              className={`p-1.5 rounded transition-colors ${
+                message.isPinned
+                  ? 'bg-yellow-100 hover:bg-yellow-200'
+                  : 'hover:bg-yellow-100'
+              }`}
+              aria-label={message.isPinned ? "Unpin message" : "Pin message"}
+              title={message.isPinned ? "Unpin" : "Pin"}
+            >
+              <Pin className={`w-4 h-4 ${message.isPinned ? 'text-yellow-600 fill-yellow-600' : 'text-yellow-600'}`} />
+            </button>
+          )}
+
           {/* Reply button */}
           {onReply && (
             <button
@@ -234,5 +257,6 @@ export const ChatPersonality = memo(({ message, settings, onLike, onReply, onJum
   return prevProps.message.id === nextProps.message.id &&
          prevProps.message.likes === nextProps.message.likes &&
          prevProps.message.threadCount === nextProps.message.threadCount &&
+         prevProps.message.isPinned === nextProps.message.isPinned &&
          JSON.stringify(prevProps.message.likedBy) === JSON.stringify(nextProps.message.likedBy);
 });

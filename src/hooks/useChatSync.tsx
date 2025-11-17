@@ -3,9 +3,10 @@ import { Message } from "@/types/personality";
 import { BROADCAST_CHANNEL_NAME } from "@/lib/constants";
 
 interface ChatSyncMessage {
-  type: "new-message" | "clear-messages" | "sync-state";
+  type: "new-message" | "clear-messages" | "sync-state" | "pin-message" | "unpin-message";
   message?: Message;
   messages?: Message[];
+  messageId?: string;
   senderId?: string;
 }
 
@@ -13,6 +14,8 @@ export function useChatSync(
   messages: Message[],
   onMessageReceived: (message: Message) => void,
   onMessagesCleared?: () => void,
+  onMessagePinned?: (messageId: string) => void,
+  onMessageUnpinned?: (messageId: string) => void,
   isPopout: boolean = false
 ) {
   const channelRef = useRef<BroadcastChannel | null>(null);
@@ -70,6 +73,10 @@ export function useChatSync(
           }
         } else if (data.type === "clear-messages") {
           onMessagesCleared?.();
+        } else if (data.type === "pin-message" && data.messageId) {
+          onMessagePinned?.(data.messageId);
+        } else if (data.type === "unpin-message" && data.messageId) {
+          onMessageUnpinned?.(data.messageId);
         } else if (data.type === "sync-state" && data.messages && isPopout) {
           // Popout window can request full state sync from main window
           data.messages.forEach((msg) => {
@@ -107,7 +114,7 @@ export function useChatSync(
 
       return null;
     }
-  }, [onMessageReceived, onMessagesCleared, isPopout]);
+  }, [onMessageReceived, onMessagesCleared, onMessagePinned, onMessageUnpinned, isPopout]);
 
   useEffect(() => {
     const channel = setupChannel();
@@ -150,6 +157,17 @@ export function useChatSync(
     }
   }, []);
 
+  // Broadcast pin/unpin message event
+  const broadcastPinToggle = useCallback((messageId: string, isPinned: boolean) => {
+    if (channelRef.current) {
+      channelRef.current.postMessage({
+        type: isPinned ? "pin-message" : "unpin-message",
+        messageId,
+        senderId: windowIdRef.current,
+      } as ChatSyncMessage);
+    }
+  }, []);
+
   // Respond to state sync requests (for main window only)
   useEffect(() => {
     if (isPopout || !channelRef.current) return;
@@ -171,5 +189,5 @@ export function useChatSync(
     };
   }, [messages, isPopout]);
 
-  return { broadcastMessage, broadcastClear };
+  return { broadcastMessage, broadcastClear, broadcastPinToggle };
 }

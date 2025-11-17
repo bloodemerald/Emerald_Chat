@@ -9,6 +9,7 @@ import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
 import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
+import { PinnedMessages } from "@/components/PinnedMessages";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
@@ -481,10 +482,32 @@ const Index = () => {
     toast.success(SUCCESS_MESSAGES.MESSAGES_CLEARED);
   }, []);
 
-  const { broadcastMessage, broadcastClear } = useChatSync(
+  const handleMessagePinned = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, isPinned: true, pinnedBy: "MODERATOR", pinnedAt: Date.now() }
+          : m
+      )
+    );
+  }, []);
+
+  const handleMessageUnpinned = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, isPinned: false, pinnedBy: undefined, pinnedAt: undefined }
+          : m
+      )
+    );
+  }, []);
+
+  const { broadcastMessage, broadcastClear, broadcastPinToggle } = useChatSync(
     messages,
     handleNewMessage,
-    handleClearMessages
+    handleClearMessages,
+    handleMessagePinned,
+    handleMessageUnpinned
   );
 
   // Limit messages to prevent memory issues (keep last 200 messages)
@@ -1191,6 +1214,40 @@ Rules:
     setReplyingTo(null);
   }, []);
 
+  // Pin/unpin message handler
+  const handlePinMessage = useCallback((messageId: string) => {
+    const MAX_PINNED_MESSAGES = 5;
+
+    setMessages((prev) => {
+      const message = prev.find((m) => m.id === messageId);
+      if (!message) return prev;
+
+      const isPinning = !message.isPinned;
+      const currentPinnedCount = prev.filter((m) => m.isPinned).length;
+
+      // Prevent pinning more than MAX_PINNED_MESSAGES
+      if (isPinning && currentPinnedCount >= MAX_PINNED_MESSAGES) {
+        toast.error(`Maximum ${MAX_PINNED_MESSAGES} pinned messages allowed`);
+        return prev;
+      }
+
+      // Broadcast the pin toggle to other windows
+      broadcastPinToggle(messageId, isPinning);
+
+      // Update the message
+      return prev.map((m) =>
+        m.id === messageId
+          ? {
+              ...m,
+              isPinned: isPinning,
+              pinnedBy: isPinning ? "MODERATOR" : undefined,
+              pinnedAt: isPinning ? Date.now() : undefined,
+            }
+          : m
+      );
+    });
+  }, [broadcastPinToggle]);
+
   const handleJumpToMessage = useCallback((messageId: string) => {
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement && chatBoxRef.current) {
@@ -1411,6 +1468,14 @@ Rules:
             </div>
           )}
 
+          {/* Pinned Messages Section */}
+          <PinnedMessages
+            messages={messages.filter(m => m.isPinned).slice(0, 5)}
+            onUnpin={handlePinMessage}
+            onJumpToMessage={handleJumpToMessage}
+            isLofiMode={isLofiMode}
+          />
+
           {/* Chat Messages Container - Takes full height */}
           <div
             ref={chatBoxRef}
@@ -1460,6 +1525,7 @@ Rules:
                       onJumpToMessage={handleJumpToMessage}
                       onViewHistory={handleViewHistory}
                       onViewProfile={handleViewProfile}
+                      onPin={handlePinMessage}
                     />
                   </div>
                 ));

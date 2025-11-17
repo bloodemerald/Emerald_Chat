@@ -69,6 +69,10 @@ export interface Message {
   replyToUsername?: string;
   replyToMessage?: string;
   threadCount?: number;
+  // Message Pinning
+  isPinned?: boolean;
+  pinnedBy?: string;
+  pinnedAt?: number;
   // Badges
   badges?: import('./badges').UserBadge[];
   // User metadata
