@@ -8,6 +8,7 @@ import { BadgeList } from "./badges/BadgeList";
 import { MessageReplyIndicator } from "./MessageReplyIndicator";
 import { ModeratorControls } from "./ModeratorControls";
 import { moderatorManager } from "@/lib/moderators";
+import { getSentimentColor, getSentimentEmoji } from "@/lib/sentimentAnalysis";
 
 interface ChatPersonalityProps {
   message: Message;
@@ -59,17 +60,23 @@ export const ChatPersonality = memo(({
   };
 
   const showTimestamps = settings?.showTimestamps !== false;
-  
+
   // Only THE single most liked message gets the bubble (passed from parent)
   const isPopular = isMostPopular;
 
   // Check if user is a moderator
   const isModerator = moderatorManager.isModeratorByUsername(message.username);
-  
+
   // Check if effect is still active
-  const isEffectActive = message.redemptionEffect && 
-                        message.effectExpiry && 
+  const isEffectActive = message.redemptionEffect &&
+                        message.effectExpiry &&
                         message.effectExpiry > Date.now();
+
+  // Sentiment highlighting
+  const shouldHighlightPositive = settings?.highlightPositive &&
+                                  message.sentiment?.label === 'positive';
+  const shouldHighlightNegative = settings?.highlightNegative &&
+                                  message.sentiment?.label === 'negative';
   
   // Apply channel point effect styling
   let effectClasses = '';
@@ -83,7 +90,7 @@ export const ChatPersonality = memo(({
         effectClasses = 'animate-pulse bg-gradient-to-r from-yellow-200 via-orange-200 to-yellow-200 border-4 border-yellow-500 shadow-2xl shadow-yellow-400/50 scale-105';
         break;
       case 'color_blast':
-        usernameStyle = { 
+        usernameStyle = {
           background: 'linear-gradient(90deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57)',
           WebkitBackgroundClip: 'text',
           WebkitTextFillColor: 'transparent',
@@ -105,6 +112,15 @@ export const ChatPersonality = memo(({
         // Shaking effect for super liked messages
         effectClasses = 'animate-shake bg-gradient-to-r from-pink-100 to-purple-100 border-2 border-pink-400 shadow-lg';
         break;
+    }
+  }
+
+  // Apply sentiment highlighting (if no effect is active)
+  if (!isEffectActive) {
+    if (shouldHighlightPositive) {
+      effectClasses = 'bg-emerald-50 border-l-2 border-emerald-400';
+    } else if (shouldHighlightNegative) {
+      effectClasses = 'bg-red-50 border-l-2 border-red-400';
     }
   }
   
@@ -190,6 +206,22 @@ export const ChatPersonality = memo(({
             {showTimestamps && (
               <span className={`text-[9px] font-mono ${isLofiMode ? 'text-slate-400' : 'text-muted-foreground'}`}>
                 {message.timestamp}
+              </span>
+            )}
+
+            {/* Sentiment indicator */}
+            {settings?.showSentimentIndicators && message.sentiment && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5"
+                style={{
+                  backgroundColor: `${getSentimentColor(message.sentiment)}20`,
+                  color: getSentimentColor(message.sentiment),
+                  border: `1px solid ${getSentimentColor(message.sentiment)}40`
+                }}
+                title={`Sentiment: ${message.sentiment.label} (${(message.sentiment.score * 100).toFixed(0)}% confidence: ${(message.sentiment.confidence * 100).toFixed(0)}%)`}
+              >
+                <span>{getSentimentEmoji(message.sentiment)}</span>
+                <span className="uppercase">{message.sentiment.label.slice(0, 3)}</span>
               </span>
             )}
 
