@@ -49,6 +49,7 @@ import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
 import { staggeredLikes } from "@/lib/staggeredLikes";
 import { userPool, ChatUser } from "@/lib/userPool";
+import { raidSimulation } from "@/lib/raidSimulation";
 import { analyzeSentiment } from "@/lib/sentimentAnalysis";
 import { channelPoints } from "@/lib/channelPoints";
 import { bitCheering, BitCheer } from "@/lib/bitCheering";
@@ -371,6 +372,14 @@ const Index = () => {
       handleAIVote(pollId, username, optionId);
     });
 
+    // Start raid simulation (random user influx 1-2 times per 30 min)
+    raidSimulation.start((raidSize) => {
+      toast.success(`🚨 RAID! ${raidSize} viewers incoming!`, {
+        duration: 5000,
+        position: 'top-center',
+      });
+    });
+
     console.log('🎬 User simulation started');
 
     // Join moderators first (high priority)
@@ -381,6 +390,7 @@ const Index = () => {
       retroactiveLikes.stop();
       staggeredLikes.stop();
       pollVoting.stop();
+      raidSimulation.stop();
       moderatorManager.reset();
       console.log('🛑 User simulation stopped');
     };
@@ -513,7 +523,15 @@ const Index = () => {
   const handleSettingsChange = (newSettings: ChatSettings) => {
     setSettings(newSettings);
   };
-  
+
+  const handleTriggerTestRaid = () => {
+    raidSimulation.triggerTestRaid();
+    toast.success('🎯 Test raid triggered! Watch the viewers flood in!', {
+      duration: 3000,
+      position: 'top-center',
+    });
+  };
+
   // Callbacks for chat sync
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
@@ -1558,7 +1576,11 @@ Rules:
               ref={settingsPanelRef}
               className="px-5 py-4 border-b border-gray-200 bg-gray-50 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
             >
-              <SettingsPanel settings={settings} onSettingsChange={handleSettingsChange} />
+              <SettingsPanel
+                settings={settings}
+                onSettingsChange={handleSettingsChange}
+                onTriggerTestRaid={handleTriggerTestRaid}
+              />
             </div>
           )}
 

@@ -8,9 +8,10 @@ import { Slider } from "./ui/slider";
 interface SettingsPanelProps {
   settings: ChatSettings;
   onSettingsChange: (settings: ChatSettings) => void;
+  onTriggerTestRaid?: () => void;
 }
 
-export const SettingsPanel = ({ settings, onSettingsChange }: SettingsPanelProps) => {
+export const SettingsPanel = ({ settings, onSettingsChange, onTriggerTestRaid }: SettingsPanelProps) => {
   const handlePersonalityToggle = (type: PersonalityType, enabled: boolean) => {
     onSettingsChange({
       ...settings,
@@ -278,6 +279,26 @@ export const SettingsPanel = ({ settings, onSettingsChange }: SettingsPanelProps
               </p>
             </div>
           )}
+        </div>
+
+        {/* Testing & Simulation */}
+        <div className="pt-3 border-t border-[rgba(16,86,82,0.2)]">
+          <h3 className="text-sm font-bold text-foreground mb-3 flex items-center gap-2 uppercase tracking-wide">
+            <span className="text-lg">🚨</span>
+            Testing & Simulation
+          </h3>
+
+          <div className="p-2.5 rounded-lg bg-[rgba(16,86,82,0.05)] border border-[rgba(16,86,82,0.2)]">
+            <button
+              onClick={onTriggerTestRaid}
+              className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 transform hover:scale-105 active:scale-95 shadow-md hover:shadow-lg"
+            >
+              🎯 Trigger Test Raid
+            </button>
+            <p className="text-[10px] text-muted-foreground mt-2 text-center">
+              Simulates a raid with 10-25 random users joining rapidly
+            </p>
+          </div>
         </div>
       </div>
     </div>
