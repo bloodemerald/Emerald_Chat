@@ -77,6 +77,13 @@ export interface Message {
   // Bit cheering
   cheerTier?: import('../lib/bitCheering').BitTier;
   cheerAnimation?: string;
+  // Sentiment analysis
+  sentiment?: {
+    score: number; // -1 to 1 (negative to positive)
+    label: 'positive' | 'negative' | 'neutral';
+    confidence: number; // 0 to 1
+    magnitude: number; // Intensity of sentiment
+  };
 }
 
 export interface ChatSettings {
@@ -91,4 +98,10 @@ export interface ChatSettings {
   pauseOnScroll: boolean;
   showTimestamps: boolean;
   enableAutoMod: boolean;
+  // Sentiment Analysis
+  enableSentimentAnalysis: boolean;
+  showSentimentIndicators: boolean;
+  sentimentFilter?: 'all' | 'positive' | 'negative' | 'neutral';
+  highlightPositive: boolean;
+  highlightNegative: boolean;
 }

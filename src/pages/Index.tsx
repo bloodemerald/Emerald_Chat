@@ -11,6 +11,7 @@ import { UserHistoryModal } from "@/components/UserHistoryModal";
 import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
 import { PollCreator } from "@/components/PollCreator";
 import { PollMessage } from "@/components/PollMessage";
+import { SentimentStats } from "@/components/SentimentStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
@@ -48,6 +49,7 @@ import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
 import { staggeredLikes } from "@/lib/staggeredLikes";
 import { userPool, ChatUser } from "@/lib/userPool";
+import { analyzeSentiment } from "@/lib/sentimentAnalysis";
 import { channelPoints } from "@/lib/channelPoints";
 import { bitCheering, BitCheer } from "@/lib/bitCheering";
 import { bitGifting, BitGift } from "@/lib/bitGifting";
@@ -90,6 +92,12 @@ const DEFAULT_SETTINGS: ChatSettings = {
   pauseOnScroll: true,
   showTimestamps: true,
   enableAutoMod: false,
+  // Sentiment Analysis
+  enableSentimentAnalysis: true,
+  showSentimentIndicators: true,
+  sentimentFilter: 'all',
+  highlightPositive: false,
+  highlightNegative: false,
 };
 
 const Index = () => {
@@ -647,6 +655,9 @@ const Index = () => {
     // Use persistent users from the user pool
     const chatUser = getOrCreateChatUser(personality);
 
+    // Analyze sentiment if enabled
+    const sentiment = settings.enableSentimentAnalysis ? analyzeSentiment(message) : undefined;
+
     const newMessage: Message = {
       id: `${Date.now()}-${Math.random()}`,
       username: chatUser.username,
@@ -663,6 +674,7 @@ const Index = () => {
       badges: chatUser.badges,
       subscriberMonths: chatUser.subscriberMonths,
       bits: chatUser.bits,
+      sentiment,
     };
 
     setMessages((prev) => {
@@ -680,6 +692,9 @@ const Index = () => {
               const chainUser = getOrCreateChatUser(
                 selectPersonality(settings.personalities)
               );
+              // Analyze sentiment for chain message
+              const chainSentiment = settings.enableSentimentAnalysis ? analyzeSentiment(chainMsg) : undefined;
+
               const chainMessage: Message = {
                 id: `${Date.now()}-${Math.random()}-chain-${idx}`,
                 username: chainUser.username,
@@ -695,6 +710,7 @@ const Index = () => {
                 badges: chainUser.badges,
                 subscriberMonths: chainUser.subscriberMonths,
                 bits: chainUser.bits,
+                sentiment: chainSentiment,
               };
               setMessages((prev) => [...prev, chainMessage]);
               broadcastMessage(chainMessage);
@@ -1323,6 +1339,9 @@ Rules:
   const sendModeratorMessage = (text: string) => {
     if (!text.trim()) return;
 
+    // Analyze sentiment if enabled
+    const sentiment = settings.enableSentimentAnalysis ? analyzeSentiment(text) : undefined;
+
     const newMessage: Message = {
       id: `${Date.now()}-${Math.random()}`,
       username: "MODERATOR",
@@ -1339,6 +1358,7 @@ Rules:
       replyToId: replyingTo?.messageId,
       replyToUsername: replyingTo?.username,
       replyToMessage: replyingTo?.message,
+      sentiment,
     };
 
     // Use startTransition to prevent UI freeze
@@ -1532,6 +1552,13 @@ Rules:
               </div>
             )}
 
+            {/* Sentiment Stats */}
+            {settings.enableSentimentAnalysis && messages.length > 0 && (
+              <div className="sticky top-2 left-2 right-2 z-10 mb-2 mx-2">
+                <SentimentStats messages={messages} />
+              </div>
+            )}
+
             {showEmptyState ? (
               <NoChatEmptyState />
             ) : (
@@ -1541,8 +1568,13 @@ Rules:
                   (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
                 , messages[0]);
 
+                // Filter messages by sentiment if enabled
+                const filteredMessages = settings.sentimentFilter && settings.sentimentFilter !== 'all'
+                  ? messages.filter(msg => msg.sentiment?.label === settings.sentimentFilter)
+                  : messages;
+
                 // Combine messages and polls, sorted by timestamp
-                const messagesWithTimestamps = messages.map(msg => ({
+                const messagesWithTimestamps = filteredMessages.map(msg => ({
                   type: 'message' as const,
                   data: msg,
                   timestamp: new Date(msg.timestamp).getTime() || 0,
