@@ -105,12 +105,14 @@ const Index = () => {
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [showUserHistory, setShowUserHistory] = useState(false);
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
+  const [isLofiMode, setIsLofiMode] = useState(false);
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const popoutWindowRef = useRef<Window | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const rateLimiterRef = useRef(new RateLimiter(API_RATE_LIMIT_DELAY));
   const messageQueueRef = useRef<Array<{ message: string; personality: PersonalityType }>>([]);
   const retryCountRef = useRef(0);
@@ -797,9 +799,22 @@ Rules:
     try {
       isWaitingForAIRef.current = true;
       await rateLimiterRef.current.execute(async () => {
+        const personalitySettings = { ...settings.personalities };
+
+        if (isLofiMode) {
+          personalitySettings.toxic = false;
+          personalitySettings.spammer = false;
+          personalitySettings.hype = false;
+          personalitySettings.meme = false;
+          personalitySettings.reaction_only = false;
+          personalitySettings.wholesome = true;
+          personalitySettings.helpful = true;
+          personalitySettings.lurker = true;
+        }
+
         const selectedPersonalities: PersonalityType[] = [];
         for (let i = 0; i < AI_BATCH_SIZE; i++) {
-          const personality = selectPersonality(settings.personalities);
+          const personality = selectPersonality(personalitySettings);
           selectedPersonalities.push(personality);
         }
 
@@ -813,9 +828,13 @@ Rules:
           .reverse()
           .find((m) => m.isModerator);
 
+        const lofiContext = isLofiMode
+          ? "Lofi mode is ON: keep messages soft, relaxed, low-energy, wholesome and supportive. Avoid shouting, toxicity, and spam."
+          : "";
+
         const moderatorAdditionalContext = latestModeratorMessage
-          ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.`
-          : undefined;
+          ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.${lofiContext ? " " + lofiContext : ""}`
+          : (lofiContext || undefined);
 
         if (shouldAddLurkerJoin(messages.length)) {
           selectedPersonalities[0] = 'lurker';
@@ -1005,7 +1024,7 @@ Rules:
       stopGenerating();
       toast.error(ERROR_MESSAGES.AI_GENERATION_FAILED, { description: "Generation stopped after multiple failures. Check console for details.", duration: 10000 });
     }
-  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage]);
+  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode]);
 
   // Start generating messages with dynamic timing
   const startGenerating = async () => {
@@ -1103,6 +1122,26 @@ Rules:
       }
     }
   };
+
+  const toggleLofiMode = useCallback(() => {
+    setIsLofiMode((prev) => {
+      const next = !prev;
+      const audio = audioRef.current;
+      if (audio) {
+        audio.volume = 0.25;
+        if (next) {
+          audio
+            .play()
+            .catch((error) => {
+              console.warn("Lofi audio play failed", error);
+            });
+        } else {
+          audio.pause();
+        }
+      }
+      return next;
+    });
+  }, []);
 
   // Auto-start generation when screenshot is captured via Play button (ONLY on initial capture)
   const hasStartedRef = useRef(false);
@@ -1262,6 +1301,10 @@ Rules:
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop());
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
       rateLimiterRef.current.clear();
     };
   }, [mediaStream]);
@@ -1304,9 +1347,17 @@ Rules:
   const showEmptyState = useMemo(() => messages.length === 0, [messages.length]);
 
   return (
-    <div className="min-h-screen h-screen bg-gradient-to-br from-background via-background-deep to-background flex">
+    <div
+      className={`h-screen flex overflow-hidden bg-gradient-to-br ${
+        isLofiMode
+          ? "from-slate-950 via-slate-900 to-slate-950"
+          : "from-background via-background-deep to-background"
+      }`}
+    >
       {/* Notification Overlay for bits, subs, channel points */}
       <NotificationOverlay />
+
+      <audio ref={audioRef} src="/lofi.mp3" loop className="hidden" />
 
       {/* Fullscreen Container - No padding, no centering */}
       <div className="w-full h-full relative">
@@ -1323,7 +1374,11 @@ Rules:
         />
 
         {/* Fullscreen Card Container */}
-        <div className="w-full h-full bg-white card-shadow overflow-hidden flex flex-col">
+        <div
+          className={`w-full h-full card-shadow overflow-hidden flex flex-col ${
+            isLofiMode ? "bg-slate-900/95 text-slate-50" : "bg-white"
+          }`}
+        >
           {/* Header */}
           <ChatHeader 
             viewerCount={viewerCount} 
@@ -1342,7 +1397,15 @@ Rules:
           )}
 
           {/* Chat Messages Container - Takes full height */}
-          <div ref={chatBoxRef} className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative flex flex-col" role="log" aria-live="polite" aria-label="Chat messages">
+          <div
+            ref={chatBoxRef}
+            className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative bg-gradient-to-b ${
+              isLofiMode ? "from-slate-900/80 to-slate-950/80" : "from-gray-50 to-gray-100"
+            }`}
+            role="log"
+            aria-live="polite"
+            aria-label="Chat messages"
+          >
             {/* Paused Indicator */}
             {isPaused && settings.pauseOnScroll && (
               <div className="sticky top-2 left-0 right-0 z-10 flex justify-center pointer-events-none mb-2">
@@ -1400,6 +1463,8 @@ Rules:
               onClearChat={handleClearMessages}
               replyingTo={replyingTo ? { username: replyingTo.username, message: replyingTo.message } : null}
               onClearReply={clearReply}
+              isLofiMode={isLofiMode}
+              onToggleLofiMode={toggleLofiMode}
             />
           </div>
         </div>

@@ -1,9 +1,9 @@
 // Application Constants
 
-// Screenshot Configuration - OPTIMIZED FOR PERFORMANCE
-export const SCREENSHOT_MAX_WIDTH = 800; // Reduced for performance
-export const SCREENSHOT_MAX_HEIGHT = 800; // Reduced for performance
-export const SCREENSHOT_QUALITY = 0.6; // Lower quality = better performance (AI can still see content)
+// Screenshot Configuration - HIGH QUALITY FOR VISION AI
+export const SCREENSHOT_MAX_WIDTH = 1920; // Full HD for better text readability
+export const SCREENSHOT_MAX_HEIGHT = 1080; // Full HD for better text readability
+export const SCREENSHOT_QUALITY = 0.85; // High quality so AI can read small text
 export const SCREENSHOT_FORMAT = 'image/jpeg'; // JPEG for Ollama compatibility
 
 // Chat Configuration

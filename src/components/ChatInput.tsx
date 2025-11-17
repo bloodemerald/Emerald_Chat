@@ -1,5 +1,5 @@
 import { useState, KeyboardEvent, useRef, useEffect } from "react";
-import { Settings, ExternalLink, Play, Square, RotateCcw } from "lucide-react";
+import { Settings, Play, Square, RotateCcw } from "lucide-react";
 import { MAX_MESSAGE_LENGTH } from "@/lib/constants";
 import { MessageReplyIndicator } from "./MessageReplyIndicator";
 
@@ -19,6 +19,8 @@ interface ChatInputProps {
     message: string;
   } | null;
   onClearReply?: () => void;
+  isLofiMode?: boolean;
+  onToggleLofiMode?: () => void;
 }
 
 const styles = `
@@ -145,13 +147,13 @@ export const ChatInput = ({
   disabled = false,
   autoFocus = false,
   isGenerating = false,
-  isPopoutOpen = false,
   onToggleSettings,
-  onOpenPopout,
   onPlayStop,
   onClearChat,
   replyingTo,
   onClearReply,
+  isLofiMode = false,
+  onToggleLofiMode,
 }: ChatInputProps) => {
   const [value, setValue] = useState("");
   const [isToggleOn, setIsToggleOn] = useState(false);
@@ -197,108 +199,121 @@ export const ChatInput = ({
     <>
       <style>{styles}</style>
       <div className="flex flex-col w-full">
-      {/* Reply Indicator */}
-      {replyingTo && (
-        <div className="mb-2">
-          <MessageReplyIndicator
-            replyToUsername={replyingTo.username}
-            replyToMessage={replyingTo.message}
-            onClear={onClearReply}
-          />
-        </div>
-      )}
-      
-      {/* Main Chat Container - Single Line */}
-      <div className="relative rounded-[12px] overflow-hidden bg-white">
-        {/* Inner Container */}
-        <div className="flex items-center gap-3 bg-gray-50 backdrop-blur-sm border border-gray-200 px-3 py-2.5">
-          {/* Single Line Input */}
-          <input
-            ref={inputRef}
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={disabled}
-            maxLength={MAX_MESSAGE_LENGTH + 50}
-            className="flex-1 bg-transparent text-foreground text-sm font-normal outline-none border-none placeholder:text-muted-foreground placeholder:transition-colors focus:placeholder:text-muted-foreground/50"
-            aria-label="Moderator message input"
-            aria-invalid={isOverLimit}
-          />
+        {/* Reply Indicator */}
+        {replyingTo && (
+          <div className="mb-2">
+            <MessageReplyIndicator
+              replyToUsername={replyingTo.username}
+              replyToMessage={replyingTo.message}
+              onClear={onClearReply}
+            />
+          </div>
+        )}
 
-          {/* Action Buttons - Consistent 32px size */}
-          <div className="flex gap-2 items-center">
-            {/* Settings Button */}
-            <button
-              type="button"
-              onClick={onToggleSettings}
-              className="action-button text-gray-400 hover:text-gray-700"
-              aria-label="Settings"
-            >
-              <Settings />
-            </button>
+        {/* Main Chat Container - Single Line */}
+        <div className="relative rounded-[12px] overflow-hidden bg-white">
+          {/* Inner Container */}
+          <div className="flex items-center gap-3 bg-gray-50 backdrop-blur-sm border border-gray-200 px-3 py-2.5">
+            {/* Single Line Input */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              disabled={disabled}
+              maxLength={MAX_MESSAGE_LENGTH + 50}
+              className="flex-1 bg-transparent text-foreground text-sm font-normal outline-none border-none placeholder:text-muted-foreground placeholder:transition-colors focus:placeholder:text-muted-foreground/50"
+              aria-label="Moderator message input"
+              aria-invalid={isOverLimit}
+            />
 
-            {/* Popout Button */}
-            <button
-              type="button"
-              onClick={onOpenPopout}
-              disabled={isPopoutOpen}
-              className="action-button text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label={isPopoutOpen ? "Popout window already open" : "Open popout window"}
-            >
-              <ExternalLink />
-            </button>
+            {/* Action Buttons - Consistent 32px size */}
+            <div className="flex gap-2 items-center">
+              {/* Settings Button */}
+              <button
+                type="button"
+                onClick={onToggleSettings}
+                className="action-button text-gray-400 hover:text-gray-700"
+                aria-label="Settings"
+              >
+                <Settings />
+              </button>
 
-            {/* Play/Stop Button */}
-            <button
-              type="button"
-              onClick={onPlayStop}
-              className={`action-button ${
-                isGenerating
-                  ? 'text-red-500 hover:text-red-600'
-                  : 'text-gray-400 hover:text-gray-700'
-              }`}
-              aria-label={isGenerating ? "Stop generation" : "Start generation"}
-            >
-              {isGenerating ? <Square /> : <Play />}
-            </button>
+              {/* Lofi Mode Button (replaces Popout) */}
+              <button
+                type="button"
+                onClick={onToggleLofiMode}
+                className={`action-button ${
+                  isLofiMode
+                    ? "text-emerald-500 bg-emerald-50 border-emerald-300"
+                    : "text-gray-400 hover:text-gray-700"
+                }`}
+                aria-label={isLofiMode ? "Disable lofi mode" : "Enable lofi mode"}
+              >
+                <span className="text-[11px] font-semibold">Lofi</span>
+              </button>
 
-            {/* Clear Chat Button */}
-            <button
-              type="button"
-              onClick={onClearChat}
-              className="action-button text-gray-400 hover:text-orange-500"
-              aria-label="Clear chat and reset context"
-              title="Clear chat and reset context"
-            >
-              <RotateCcw />
-            </button>
+              {/* Play/Stop Button */}
+              <button
+                type="button"
+                onClick={onPlayStop}
+                className={`action-button ${
+                  isGenerating
+                    ? "text-red-500 hover:text-red-600"
+                    : "text-gray-400 hover:text-gray-700"
+                }`}
+                aria-label={isGenerating ? "Stop generation" : "Start generation"}
+              >
+                {isGenerating ? <Square /> : <Play />}
+              </button>
 
-            {/* Toggle Send Button */}
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={isToggleOn}
-                onChange={handleToggle}
-                disabled={!value.trim() || disabled}
-              />
-              <div className="button"></div>
-              <div className="label">➤</div>
-            </label>
+              {/* Clear Chat Button */}
+              <button
+                type="button"
+                onClick={onClearChat}
+                className="action-button text-gray-400 hover:text-orange-500"
+                aria-label="Clear chat and reset context"
+                title="Clear chat and reset context"
+              >
+                <RotateCcw />
+              </button>
+
+              {/* Toggle Send Button */}
+              <label className="toggle">
+                <input
+                  type="checkbox"
+                  checked={isToggleOn}
+                  onChange={handleToggle}
+                  disabled={!value.trim() || disabled}
+                />
+                <div className="button"></div>
+                <div className="label">➤</div>
+              </label>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Character Counter */}
-      {value.length > 0 && (
-        <div className="flex justify-end mt-1">
-          <span className={`text-xs font-semibold ${isOverLimit ? "text-red-500" : value.length > MAX_MESSAGE_LENGTH - 20 ? "text-yellow-600" : "text-muted-foreground"}`}>
-            {isOverLimit ? `${value.length - MAX_MESSAGE_LENGTH} over limit` : `${MAX_MESSAGE_LENGTH - value.length} remaining`}
-          </span>
-        </div>
-      )}
-    </div>
+        {/* Character Counter */}
+        {value.length > 0 && (
+          <div className="flex justify-end mt-1">
+            <span
+              className={`text-xs font-semibold ${
+                isOverLimit
+                  ? "text-red-500"
+                  : value.length > MAX_MESSAGE_LENGTH - 20
+                    ? "text-yellow-600"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {isOverLimit
+                ? `${value.length - MAX_MESSAGE_LENGTH} over limit`
+                : `${MAX_MESSAGE_LENGTH - value.length} remaining`}
+            </span>
+          </div>
+        )}
+      </div>
     </>
   );
 };
