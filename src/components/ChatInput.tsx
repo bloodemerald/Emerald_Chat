@@ -224,7 +224,11 @@ export const ChatInput = ({
               placeholder={placeholder}
               disabled={disabled}
               maxLength={MAX_MESSAGE_LENGTH + 50}
-              className="flex-1 bg-transparent text-foreground text-sm font-normal outline-none border-none placeholder:text-muted-foreground placeholder:transition-colors focus:placeholder:text-muted-foreground/50"
+              className={`flex-1 bg-transparent text-sm font-normal outline-none border-none placeholder:transition-colors ${
+                isLofiMode 
+                  ? "text-slate-100 placeholder:text-slate-400 focus:placeholder:text-slate-500" 
+                  : "text-foreground placeholder:text-muted-foreground focus:placeholder:text-muted-foreground/50"
+              }`}
               aria-label="Moderator message input"
               aria-invalid={isOverLimit}
             />
@@ -235,7 +239,11 @@ export const ChatInput = ({
               <button
                 type="button"
                 onClick={onToggleSettings}
-                className="action-button text-gray-400 hover:text-gray-700"
+                className={`action-button ${
+                  isLofiMode 
+                    ? "text-slate-400 hover:text-slate-200" 
+                    : "text-gray-400 hover:text-gray-700"
+                }`}
                 aria-label="Settings"
               >
                 <Settings />
@@ -262,6 +270,8 @@ export const ChatInput = ({
                 className={`action-button ${
                   isGenerating
                     ? "text-red-500 hover:text-red-600"
+                    : isLofiMode
+                    ? "text-slate-400 hover:text-slate-200"
                     : "text-gray-400 hover:text-gray-700"
                 }`}
                 aria-label={isGenerating ? "Stop generation" : "Start generation"}
@@ -273,7 +283,11 @@ export const ChatInput = ({
               <button
                 type="button"
                 onClick={onClearChat}
-                className="action-button text-gray-400 hover:text-orange-500"
+                className={`action-button ${
+                  isLofiMode 
+                    ? "text-slate-400 hover:text-orange-400" 
+                    : "text-gray-400 hover:text-orange-500"
+                }`}
                 aria-label="Clear chat and reset context"
                 title="Clear chat and reset context"
               >

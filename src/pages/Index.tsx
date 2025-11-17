@@ -1431,6 +1431,7 @@ Rules:
                       message={msg}
                       settings={settings}
                       isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
+                      isLofiMode={isLofiMode}
                       onLike={(messageId) => {
                         setMessages((prev) =>
                           prev.map((m) =>
@@ -1452,7 +1453,11 @@ Rules:
           </div>
 
           {/* Input Container */}
-          <div className="p-4 bg-gradient-to-b from-white to-gray-50/30 border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)]">
+          <div className={`p-4 bg-gradient-to-b border-t shadow-[0_-2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
+            isLofiMode 
+              ? "from-slate-800 to-slate-900/30 border-slate-700" 
+              : "from-white to-gray-50/30 border-gray-200"
+          }`}>
             <ChatInput
               onSendMessage={sendModeratorMessage}
               isGenerating={isGenerating}
