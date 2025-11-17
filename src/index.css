@@ -157,8 +157,103 @@ APPLE INSPIRED THEME: Clean, minimal, emerald accent
   }
 }
 
+/* Enhanced slide-in from bottom (like iMessage) */
+@keyframes slide-in-bottom {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Slide-in from right (notification style) */
+@keyframes slide-in-right {
+  0% {
+    opacity: 0;
+    transform: translateX(32px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Slide-in from left */
+@keyframes slide-in-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-32px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* New message highlight pulse */
+@keyframes highlight-pulse {
+  0% {
+    background-color: transparent;
+  }
+  10% {
+    background-color: hsl(158 64% 52% / 0.15);
+    box-shadow: 0 0 0 2px hsl(158 64% 52% / 0.3);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* Highlight glow for jumped-to messages */
+@keyframes highlight-glow {
+  0%, 100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+  50% {
+    background-color: hsl(158 64% 52% / 0.2);
+    box-shadow: 0 0 0 3px hsl(158 64% 52% / 0.4), inset 0 0 12px hsl(158 64% 52% / 0.2);
+  }
+}
+
+/* Smooth scale pulse for likes */
+@keyframes like-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+/* Message entrance animations */
 .chat-message-enter {
-  animation: slide-up-fade 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: slide-in-bottom 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.chat-message-slide-right {
+  animation: slide-in-right 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.chat-message-slide-left {
+  animation: slide-in-left 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Highlight effects */
+.message-new-highlight {
+  animation: highlight-pulse 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.message-jump-highlight {
+  animation: highlight-glow 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.message-like-pulse {
+  animation: like-pulse 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 /* Apple-style Utility Classes */

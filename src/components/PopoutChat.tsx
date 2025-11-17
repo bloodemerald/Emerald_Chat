@@ -7,11 +7,26 @@ import { useChatSync } from "@/hooks/useChatSync";
 
 export const PopoutChat = () => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
   const chatBoxRef = useRef<HTMLDivElement>(null);
+
+  // Helper function to mark a message as new for animation
+  const markMessageAsNew = useCallback((messageId: string) => {
+    setNewMessageIds((prev) => new Set([...prev, messageId]));
+    // Clear the "new" status after animation completes
+    setTimeout(() => {
+      setNewMessageIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+    }, 1500);
+  }, []);
 
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
-  }, []);
+    markMessageAsNew(message.id);
+  }, [markMessageAsNew]);
 
   const handleClearMessages = useCallback(() => {
     setMessages([]);
@@ -42,7 +57,14 @@ export const PopoutChat = () => {
         {messages.length === 0 ? (
           <NoChatEmptyState />
         ) : (
-          messages.map((msg) => <ChatPersonality key={msg.id} message={msg} />)
+          messages.map((msg) => (
+            <ChatPersonality
+              key={msg.id}
+              message={msg}
+              isNew={newMessageIds.has(msg.id)}
+              animationStyle="right"
+            />
+          ))
         )}
       </div>
     </div>

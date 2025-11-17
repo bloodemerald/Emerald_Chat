@@ -126,6 +126,10 @@ const Index = () => {
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [userVotes, setUserVotes] = useState<Map<string, string>>(new Map()); // pollId -> optionId
 
+  // Animation state
+  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
   const settingsPanelRef = useRef<HTMLDivElement>(null);
@@ -164,6 +168,25 @@ const Index = () => {
     }
     return "";
   }, []);
+
+  // Helper function to mark a message as new for animation
+  const markMessageAsNew = useCallback((messageId: string) => {
+    setNewMessageIds((prev) => new Set([...prev, messageId]));
+    // Clear the "new" status after animation completes
+    setTimeout(() => {
+      setNewMessageIds((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(messageId);
+        return newSet;
+      });
+    }, 1500); // Duration of entrance animation + highlight
+  }, []);
+
+  // Helper function to add a message with animation
+  const addMessageWithAnimation = useCallback((message: Message) => {
+    setMessages((prev) => [...prev, message]);
+    markMessageAsNew(message.id);
+  }, [markMessageAsNew]);
 
   // Keep message bit badges in sync with user balances (cheers & gifts)
   useEffect(() => {
@@ -486,9 +509,10 @@ const Index = () => {
   // Callbacks for chat sync
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
+    markMessageAsNew(message.id);
     // Schedule staggered likes for this new message
     staggeredLikes.schedulelikesForMessage(message);
-  }, []);
+  }, [markMessageAsNew]);
 
   const handleClearMessages = useCallback(() => {
     setMessages([]);
@@ -668,6 +692,9 @@ const Index = () => {
     setMessages((prev) => {
       const updated = [...prev, newMessage];
 
+      // Mark as new for animation
+      markMessageAsNew(newMessage.id);
+
       // Schedule staggered likes for this new message
       staggeredLikes.schedulelikesForMessage(newMessage);
 
@@ -697,6 +724,7 @@ const Index = () => {
                 bits: chainUser.bits,
               };
               setMessages((prev) => [...prev, chainMessage]);
+              markMessageAsNew(chainMessage.id);
               broadcastMessage(chainMessage);
               // Schedule likes for chain message
               staggeredLikes.schedulelikesForMessage(chainMessage);
@@ -804,6 +832,7 @@ Rules:
       
       console.log("💬 Adding no-screen message:", newMessage.message);
       setMessages((prev) => [...prev, newMessage]);
+      markMessageAsNew(newMessage.id);
       broadcastMessage(newMessage);
       return;
     }
@@ -1210,11 +1239,11 @@ Rules:
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement && chatBoxRef.current) {
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Highlight briefly
-      messageElement.classList.add('bg-purple-100');
+      // Highlight with animation
+      setHighlightedMessageId(messageId);
       setTimeout(() => {
-        messageElement.classList.remove('bg-purple-100');
-      }, 1500);
+        setHighlightedMessageId(null);
+      }, 2000);
     }
   }, []);
 
@@ -1344,6 +1373,7 @@ Rules:
     // Use startTransition to prevent UI freeze
     startTransition(() => {
       setMessages((prev) => [...prev, newMessage]);
+      markMessageAsNew(newMessage.id);
       broadcastMessage(newMessage);
       // Schedule staggered likes for moderator message
       staggeredLikes.schedulelikesForMessage(newMessage);
@@ -1560,6 +1590,9 @@ Rules:
                 return combined.map((item) => {
                   if (item.type === 'message') {
                     const msg = item.data;
+                    const isNew = newMessageIds.has(msg.id);
+                    const isHighlighted = highlightedMessageId === msg.id;
+
                     return (
                       <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
                         <ChatPersonality
@@ -1567,6 +1600,9 @@ Rules:
                           settings={settings}
                           isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
                           isLofiMode={isLofiMode}
+                          isNew={isNew}
+                          isHighlighted={isHighlighted}
+                          animationStyle="bottom"
                           onLike={(messageId) => {
                             setMessages((prev) =>
                               prev.map((m) =>
