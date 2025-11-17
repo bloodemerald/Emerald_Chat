@@ -112,7 +112,6 @@ const Index = () => {
   const settingsPanelRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const popoutWindowRef = useRef<Window | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const rateLimiterRef = useRef(new RateLimiter(API_RATE_LIMIT_DELAY));
   const messageQueueRef = useRef<Array<{ message: string; personality: PersonalityType }>>([]);
   const retryCountRef = useRef(0);
@@ -801,17 +800,6 @@ Rules:
       await rateLimiterRef.current.execute(async () => {
         const personalitySettings = { ...settings.personalities };
 
-        if (isLofiMode) {
-          personalitySettings.toxic = false;
-          personalitySettings.spammer = false;
-          personalitySettings.hype = false;
-          personalitySettings.meme = false;
-          personalitySettings.reaction_only = false;
-          personalitySettings.wholesome = true;
-          personalitySettings.helpful = true;
-          personalitySettings.lurker = true;
-        }
-
         const selectedPersonalities: PersonalityType[] = [];
         for (let i = 0; i < AI_BATCH_SIZE; i++) {
           const personality = selectPersonality(personalitySettings);
@@ -828,13 +816,9 @@ Rules:
           .reverse()
           .find((m) => m.isModerator);
 
-        const lofiContext = isLofiMode
-          ? "Lofi mode is ON: keep messages soft, relaxed, low-energy, wholesome and supportive. Avoid shouting, toxicity, and spam."
-          : "";
-
         const moderatorAdditionalContext = latestModeratorMessage
-          ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.${lofiContext ? " " + lofiContext : ""}`
-          : (lofiContext || undefined);
+          ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.`
+          : undefined;
 
         if (shouldAddLurkerJoin(messages.length)) {
           selectedPersonalities[0] = 'lurker';
@@ -1124,23 +1108,7 @@ Rules:
   };
 
   const toggleLofiMode = useCallback(() => {
-    setIsLofiMode((prev) => {
-      const next = !prev;
-      const audio = audioRef.current;
-      if (audio) {
-        audio.volume = 0.25;
-        if (next) {
-          audio
-            .play()
-            .catch((error) => {
-              console.warn("Lofi audio play failed", error);
-            });
-        } else {
-          audio.pause();
-        }
-      }
-      return next;
-    });
+    setIsLofiMode((prev) => !prev);
   }, []);
 
   // Auto-start generation when screenshot is captured via Play button (ONLY on initial capture)
@@ -1301,10 +1269,6 @@ Rules:
       if (mediaStream) {
         mediaStream.getTracks().forEach((track) => track.stop());
       }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-      }
       rateLimiterRef.current.clear();
     };
   }, [mediaStream]);
@@ -1356,8 +1320,6 @@ Rules:
     >
       {/* Notification Overlay for bits, subs, channel points */}
       <NotificationOverlay />
-
-      <audio ref={audioRef} src="/lofi.mp3" loop className="hidden" />
 
       {/* Fullscreen Container - No padding, no centering */}
       <div className="w-full h-full relative">

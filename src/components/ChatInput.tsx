@@ -249,7 +249,7 @@ export const ChatInput = ({
                 <Settings />
               </button>
 
-              {/* Lofi Mode Button (replaces Popout) */}
+              {/* Dark Mode Button */}
               <button
                 type="button"
                 onClick={onToggleLofiMode}
@@ -258,9 +258,9 @@ export const ChatInput = ({
                     ? "text-emerald-500 bg-emerald-50 border-emerald-300"
                     : "text-gray-400 hover:text-gray-700"
                 }`}
-                aria-label={isLofiMode ? "Disable lofi mode" : "Enable lofi mode"}
+                aria-label={isLofiMode ? "Disable dark mode" : "Enable dark mode"}
               >
-                <span className="text-[11px] font-semibold">Lofi</span>
+                <span className="text-[11px] font-semibold">Dark</span>
               </button>
 
               {/* Play/Stop Button */}
