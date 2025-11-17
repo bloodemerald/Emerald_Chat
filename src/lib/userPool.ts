@@ -364,12 +364,115 @@ class UserPool {
       console.warn(`⚠️ Moderator username ${user.username} already exists, skipping`);
       return;
     }
-    
+
     // Add to pool
     this.users.set(user.id, user);
     this.usernameSet.add(user.username);
     console.log(`✅ Added moderator ${user.username} to user pool (State: ${user.state}, Personality: ${user.personality})`);
     console.log(`📊 Total users: ${this.users.size}, Active users: ${this.getActiveUsers().length}`);
+  }
+
+  /**
+   * Bulk join multiple users at once (for raid simulation)
+   */
+  bulkJoinUsers(count: number): ChatUser[] {
+    const joinedUsers: ChatUser[] = [];
+    const offlineUsers = this.getUsersByState('offline');
+    const actualCount = Math.min(count, offlineUsers.length);
+
+    for (let i = 0; i < actualCount; i++) {
+      const user = this.joinRandomUser();
+      if (user) {
+        joinedUsers.push(user);
+      }
+    }
+
+    console.log(`📥 Bulk joined ${joinedUsers.length} users`);
+    return joinedUsers;
+  }
+
+  /**
+   * Bulk activate multiple lurkers at once (for raid simulation)
+   */
+  bulkActivateLurkers(count: number): ChatUser[] {
+    const activatedUsers: ChatUser[] = [];
+    const lurkers = this.getUsersByState('lurking');
+    const actualCount = Math.min(count, lurkers.length);
+
+    for (let i = 0; i < actualCount; i++) {
+      const user = this.activateLurker();
+      if (user) {
+        activatedUsers.push(user);
+      }
+    }
+
+    console.log(`✅ Bulk activated ${activatedUsers.length} lurkers`);
+    return activatedUsers;
+  }
+
+  /**
+   * Expand user pool with additional users (for massive raids)
+   */
+  expandPool(additionalUsers: number): number {
+    const personalities: PersonalityType[] = [
+      'toxic', 'helpful', 'meme', 'backseat', 'hype', 'lurker', 'spammer', 'analyst'
+    ];
+
+    let addedCount = 0;
+
+    for (let i = 0; i < additionalUsers; i++) {
+      const personality = personalities[Math.floor(Math.random() * personalities.length)];
+      const username = generateUsername(personality, this.usernameSet);
+
+      // Check for duplicates
+      if (this.usernameSet.has(username)) {
+        continue;
+      }
+
+      const subscriberMonths = generateSubscriberMonths();
+      const bits = generateBits();
+      const createdAt = Date.now() - Math.random() * 365 * 24 * 60 * 60 * 1000;
+
+      const user: ChatUser = {
+        id: `expanded-${Date.now()}-${i}`,
+        username,
+        personality,
+        state: 'offline',
+        joinTime: 0,
+        lastActivityTime: 0,
+        messageCount: 0,
+        likesGiven: 0,
+        activityLevel: Math.random() * 0.5 + 0.3,
+        badges: generateUserBadges(personality, subscriberMonths, bits, false),
+        subscriberMonths,
+        bits,
+        avatarEmoji: generateAvatar(personality),
+        bio: generateBio(personality),
+        favoriteTeam: Math.random() < 0.7 ? generateFavoriteTeam() : undefined,
+        profileColor: generateProfileColor(personality),
+        createdAt,
+        moderation: {
+          isBanned: false,
+          isTimedOut: false,
+          warnings: 0,
+          modActions: []
+        }
+      };
+
+      this.users.set(user.id, user);
+      this.usernameSet.add(username);
+      addedCount++;
+    }
+
+    console.log(`👥 Expanded user pool by ${addedCount} users (Total: ${this.users.size})`);
+    return addedCount;
+  }
+
+  /**
+   * Get current pool size
+   */
+  getPoolSize(): number {
+    return this.users.size;
   }
 }
 

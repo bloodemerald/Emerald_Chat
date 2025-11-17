@@ -9,6 +9,7 @@ import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
 import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
+import { RaidSimulator } from "@/components/RaidSimulator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
@@ -116,6 +117,7 @@ const Index = () => {
   const [isLofiMode, setIsLofiMode] = useState(false);
   const [screenshotHistory, setScreenshotHistory] = useState<ScreenshotHistory>(() => loadScreenshotHistory());
   const [showScreenshotTimeline, setShowScreenshotTimeline] = useState(false);
+  const [showRaidSimulator, setShowRaidSimulator] = useState(false);
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -1251,6 +1253,36 @@ Rules:
     });
   };
 
+  // Handle raid messages
+  const handleRaidMessage = useCallback((message: string, username: string) => {
+    const user = userPool.getUserByUsername(username);
+    if (!user) return;
+
+    const newMessage: Message = {
+      id: `${Date.now()}-${Math.random()}`,
+      username: user.username,
+      color: user.profileColor,
+      message,
+      timestamp: new Date().toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      personality: user.personality,
+      likes: 0,
+      likedBy: [],
+      badges: user.badges,
+      subscriberMonths: user.subscriberMonths,
+    };
+
+    // Use startTransition to prevent UI freeze
+    startTransition(() => {
+      setMessages((prev) => [...prev, newMessage]);
+      broadcastMessage(newMessage);
+      // Schedule staggered likes for raid message
+      staggeredLikes.schedulelikesForMessage(newMessage);
+    });
+  }, [broadcastMessage]);
+
   // Clear chat
   const handleClearChat = () => {
     handleClearMessages();
@@ -1411,6 +1443,16 @@ Rules:
             </div>
           )}
 
+          {/* Raid Simulator Panel */}
+          {showRaidSimulator && (
+            <div className="px-5 py-4 border-b border-gray-200 bg-gray-50 max-h-[500px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400">
+              <RaidSimulator
+                onRaidMessage={handleRaidMessage}
+                onClose={() => setShowRaidSimulator(false)}
+              />
+            </div>
+          )}
+
           {/* Chat Messages Container - Takes full height */}
           <div
             ref={chatBoxRef}
@@ -1478,6 +1520,7 @@ Rules:
               isGenerating={isGenerating}
               isPopoutOpen={isPopoutOpen}
               onToggleSettings={() => setShowSettings((prev) => !prev)}
+              onToggleRaidSimulator={() => setShowRaidSimulator((prev) => !prev)}
               onOpenPopout={openPopout}
               onPlayStop={handlePlayStop}
               onClearChat={handleClearMessages}

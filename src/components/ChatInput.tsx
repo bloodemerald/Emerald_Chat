@@ -1,5 +1,5 @@
 import { useState, KeyboardEvent, useRef, useEffect } from "react";
-import { Settings, Play, Square, RotateCcw } from "lucide-react";
+import { Settings, Play, Square, RotateCcw, Zap } from "lucide-react";
 import { MAX_MESSAGE_LENGTH } from "@/lib/constants";
 import { MessageReplyIndicator } from "./MessageReplyIndicator";
 
@@ -11,6 +11,7 @@ interface ChatInputProps {
   isGenerating?: boolean;
   isPopoutOpen?: boolean;
   onToggleSettings?: () => void;
+  onToggleRaidSimulator?: () => void;
   onOpenPopout?: () => void;
   onPlayStop?: () => void;
   onClearChat?: () => void;
@@ -148,6 +149,7 @@ export const ChatInput = ({
   autoFocus = false,
   isGenerating = false,
   onToggleSettings,
+  onToggleRaidSimulator,
   onPlayStop,
   onClearChat,
   replyingTo,
@@ -240,13 +242,28 @@ export const ChatInput = ({
                 type="button"
                 onClick={onToggleSettings}
                 className={`action-button ${
-                  isLofiMode 
-                    ? "text-slate-400 hover:text-slate-200" 
+                  isLofiMode
+                    ? "text-slate-400 hover:text-slate-200"
                     : "text-gray-400 hover:text-gray-700"
                 }`}
                 aria-label="Settings"
               >
                 <Settings />
+              </button>
+
+              {/* Raid Simulator Button */}
+              <button
+                type="button"
+                onClick={onToggleRaidSimulator}
+                className={`action-button ${
+                  isLofiMode
+                    ? "text-slate-400 hover:text-purple-400"
+                    : "text-gray-400 hover:text-purple-600"
+                }`}
+                aria-label="Raid Simulator"
+                title="Simulate mass user influx"
+              >
+                <Zap className="w-4 h-4" />
               </button>
 
               {/* Dark Mode Button */}
