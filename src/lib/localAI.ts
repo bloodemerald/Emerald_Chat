@@ -128,45 +128,45 @@ export async function generateWithOllama({
       : "";
 
     // Enhanced prompt for specific, contextual reactions
-    const visionPrompt = `You are ${batchSize} different viewers watching screen content. Write ${batchSize} SHORT chat messages about what you see.
+    const visionPrompt = `You are ${batchSize} different viewers watching the streamer's current screen. Write ${batchSize} SHORT chat messages about what you actually see.
 
 CRITICAL RULES:
-- Output ONLY ${batchSize} chat messages, one per line
-- Each message MUST be under 100 characters
-- NO descriptions, NO explanations, NO paragraphs
-- Write like REAL stream chat - casual, imperfect, short
-- If you can identify what application, game, or content is being shown, reference it naturally
-- React to what's happening on screen, not the streaming platform
-- PRIORITY: If a moderator asks "what game is this?" or similar, AT LEAST ONE message MUST identify the game/application name
-
-SPECIAL CONTEXT FOR IDEs/CODE EDITORS:
-- If you see a dark-themed code editor (VSCode, Windsurf, etc.), react to the coding activity, NOT the dark background
-- Dark screens with UI elements = code editor, not "blank screen"
-- React to: code language, file tabs, terminal output, errors, themes, extensions
-- Examples: "dark theme looks clean", "whats the file ur working on", "typescript nice", "that error tho"
+- Output ONLY ${batchSize} chat messages, one per line.
+- Each message MUST be under 100 characters.
+- NO descriptions, NO explanations, NO paragraphs.
+- Write like REAL stream chat - casual, imperfect, short.
+- Reference the real application/website/game only if you can see reliable evidence (logos, UI elements, text). If you're unsure, react to what is clearly visible (colors, layout, text snippets) instead of guessing.
+- Treat browsers, Reddit, YouTube, coding IDEs, docs, and desktop screens as first-class contexts. Never assume a video game unless you actually see one.
+- When it's a coding IDE, mention languages/files/errors/themes instead of "blank screen" comments.
+- When it's a website (e.g., reddit.com, news sites), mention the site name or obvious UI elements.
+- If nothing is obvious, acknowledge uncertainty ("cant tell what app this is").
 
 GOOD EXAMPLES:
-"that syntax error lol"
+"dark reddit theme clean"
+"looks like r/singularity convo"
+"fix that import"
 "75hp left heal up"
 "localhost:8080 working"
 "nice theme ngl"
-"200hp pog"
-"fix that import"
-"looks like Tarkov to me"
-"pretty sure thats Valorant"
-"coding stream pog"
 "whats that file?"
 
 BAD EXAMPLES (DO NOT DO THIS):
 "The image shows a computer screen with..."
-"This appears to be a screenshot of..."
-"The user is displaying a web browser..."
 "Empty space in the screen"
 "looks like a blank screen"
+"probably valorant?" (unless valorant UI is visible)
 
 Recent chat: ${recentChat.slice(-3).join(", ") || "none"}${moderatorFocus}
 
-Write ${batchSize} SHORT messages about what you see:`;
+After the ${batchSize} chat messages, add ONE extra line in this exact format:
+APP_CONTEXT: <short description of what is actually on screen>
+Examples:
+APP_CONTEXT: "Reddit - r/singularity thread"
+APP_CONTEXT: "VS Code editing SettingsPanel.tsx"
+APP_CONTEXT: "Desktop idle - no app in focus"
+If unsure, write "APP_CONTEXT: Unknown - can't tell".
+
+Write ${batchSize} SHORT messages now:`;
 
     // Call Ollama's native API (better vision support than OpenAI-compatible endpoint)
     const response = await fetch(`${baseUrl}/api/generate`, {
@@ -205,12 +205,22 @@ Write ${batchSize} SHORT messages about what you see:`;
     console.log("📊 Response length:", content.length, "chars");
 
     // Parse the response into individual messages
-    const messages = content
+    const lines = content
       .split("\n")
+      .map((line: string) => line.trim())
+      .filter((line: string) => line.length > 0);
+
+    let detectedContext: string | undefined;
+    if (lines.length > 0 && /^APP_CONTEXT:/i.test(lines[lines.length - 1])) {
+      detectedContext = lines[lines.length - 1].replace(/^APP_CONTEXT:\s*/i, '').trim();
+      lines.pop();
+    }
+
+    const messages = lines
       .map((line: string) => {
         let cleaned = line.trim();
         // Remove common AI formatting artifacts
-        cleaned = cleaned.replace(/^["']|["']$/g, ''); // Remove quotes
+        cleaned = cleaned.replace(/^['"]|['"]$/g, ''); // Remove quotes
         cleaned = cleaned.replace(/^\d+\.\s*/, ''); // Remove "1. "
         cleaned = cleaned.replace(/^[-*]\s*/, ''); // Remove "- " or "* "
         cleaned = cleaned.replace(/^Personality\s+\d+\s*[-:]\s*/i, ''); // Remove "Personality 1 - "
@@ -225,13 +235,12 @@ Write ${batchSize} SHORT messages about what you see:`;
       personality: personalities[index % personalities.length],
     }));
 
-    return { messages: results };
+    return { messages: results, detectedContent: detectedContext };
   } catch (error) {
     console.error("❌ Local Ollama generation failed:", error);
     throw error;
   }
 }
-
 /**
  * Compare two screenshots and describe what changed between them using vision AI
  */
@@ -250,11 +259,6 @@ export async function compareScreenshots({
     const baseUrl = getOllamaBaseUrl(ollamaApiUrl);
 
     // Extract base64 data
-    let base64Previous = previousScreenshot;
-    if (previousScreenshot.includes('base64,')) {
-      base64Previous = previousScreenshot.split('base64,')[1];
-    }
-
     let base64Current = currentScreenshot;
     if (currentScreenshot.includes('base64,')) {
       base64Current = currentScreenshot.split('base64,')[1];

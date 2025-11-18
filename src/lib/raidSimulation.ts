@@ -28,10 +28,19 @@ class RaidSimulation {
       return;
     }
 
-    this.onRaidCallback = onRaid;
+    if (onRaid) {
+      this.onRaidCallback = onRaid;
+    }
     this.isRunning = true;
     this.scheduleNextRaid();
     console.log('Raid simulation started');
+  }
+
+  /**
+   * Assign a callback for raid events without restarting
+   */
+  onRaid(callback: (raidSize: number) => void) {
+    this.onRaidCallback = callback;
   }
 
   /**
@@ -72,7 +81,7 @@ class RaidSimulation {
   /**
    * Execute a raid: bring in a random number of users rapidly
    */
-  executeRaid(): void {
+  executeRaid(): number {
     const raidSize = Math.floor(
       Math.random() * (this.config.maxUsers - this.config.minUsers + 1) +
         this.config.minUsers
@@ -108,6 +117,8 @@ class RaidSimulation {
     if (this.onRaidCallback) {
       this.onRaidCallback(raidSize);
     }
+
+    return raidSize;
   }
 
   /**
@@ -129,9 +140,9 @@ class RaidSimulation {
   /**
    * Manually trigger a test raid
    */
-  triggerTestRaid(): void {
+  triggerTestRaid(): number {
     console.log('Triggering test raid...');
-    this.executeRaid();
+    return this.executeRaid();
   }
 
   /**

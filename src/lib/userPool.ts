@@ -65,6 +65,8 @@ const USERNAME_BASES: Record<PersonalityType, string[]> = {
   mobile_only: ['Mobile', 'Phone', 'OnTheGo', 'Portable', 'Wireless', 'Handheld']
 };
 
+const PERSONALITY_KEYS = Object.keys(USERNAME_BASES) as PersonalityType[];
+
 /**
  * Generate a unique Twitch-style username
  */
@@ -117,6 +119,7 @@ class UserPool {
   private users: Map<string, ChatUser> = new Map();
   private usernameSet: Set<string> = new Set();
   private readonly USERS_PER_PERSONALITY = 8; // 8 users per personality type
+  private dynamicUserIndex = 0;
   
   constructor() {
     this.initializeUserPool();
@@ -219,9 +222,10 @@ class UserPool {
    * Join a random offline user to chat
    */
   joinRandomUser(): ChatUser | null {
+    this.ensureOfflineBuffer();
     const offlineUsers = this.getUsersByState('offline');
     if (offlineUsers.length === 0) return null;
-    
+
     const user = offlineUsers[Math.floor(Math.random() * offlineUsers.length)];
     user.state = 'lurking';
     user.joinTime = Date.now();
@@ -234,7 +238,17 @@ class UserPool {
   /**
    * Promote a lurker to active
    */
-  activateLurker(): ChatUser | null {
+  activateLurker(targetUserId?: string): ChatUser | null {
+    if (targetUserId) {
+      const targeted = this.users.get(targetUserId);
+      if (targeted && targeted.state === 'lurking') {
+        targeted.state = 'active';
+        targeted.lastActivityTime = Date.now();
+        console.log(`✅ ${targeted.username} became active (targeted)`);
+        return targeted;
+      }
+    }
+
     const lurkers = this.getUsersByState('lurking');
     if (lurkers.length === 0) return null;
     
@@ -251,6 +265,68 @@ class UserPool {
     
     console.log(`✅ ${user.username} became active`);
     return user;
+  }
+
+  private ensureOfflineBuffer(minBuffer: number = 8) {
+    const offlineCount = this.getUsersByState('offline').length;
+    if (offlineCount >= minBuffer) return;
+
+    const needed = Math.max(minBuffer - offlineCount, minBuffer);
+    this.seedOfflineUsers(needed);
+  }
+
+  private seedOfflineUsers(count: number = 10) {
+    const additions: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const personality = PERSONALITY_KEYS[Math.floor(Math.random() * PERSONALITY_KEYS.length)] || 'lurker';
+      const newUser = this.createDynamicUser(personality);
+      if (newUser) {
+        this.users.set(newUser.id, newUser);
+        this.usernameSet.add(newUser.username);
+        additions.push(newUser.username);
+      }
+    }
+
+    if (additions.length > 0) {
+      console.log(`🌟 Seeded ${additions.length} fresh viewers for raids: ${additions.slice(0, 5).join(', ')}${additions.length > 5 ? '...' : ''}`);
+    }
+  }
+
+  private createDynamicUser(personality: PersonalityType): ChatUser | null {
+    const username = generateUsername(personality, this.usernameSet);
+    if (this.usernameSet.has(username)) {
+      return null;
+    }
+
+    const subscriberMonths = generateSubscriberMonths();
+    const bits = generateBits();
+    const createdAt = Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000; // within ~3 months
+
+    return {
+      id: `dynamic-${personality}-${Date.now()}-${this.dynamicUserIndex++}`,
+      username,
+      personality,
+      state: 'offline',
+      joinTime: 0,
+      lastActivityTime: 0,
+      messageCount: 0,
+      likesGiven: 0,
+      activityLevel: Math.random() * 0.4 + 0.4,
+      badges: generateUserBadges(personality, subscriberMonths, bits, false),
+      subscriberMonths,
+      bits,
+      avatarEmoji: generateAvatar(personality),
+      bio: generateBio(personality),
+      favoriteTeam: Math.random() < 0.7 ? generateFavoriteTeam() : undefined,
+      profileColor: generateProfileColor(personality),
+      createdAt,
+      moderation: {
+        isBanned: false,
+        isTimedOut: false,
+        warnings: 0,
+        modActions: []
+      }
+    };
   }
   
   /**

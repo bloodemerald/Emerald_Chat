@@ -6,6 +6,8 @@ interface BitCheerNotificationProps {
   onComplete?: () => void;
 }
 
+const PIXEL_DROPS = ['💰', '💎', '🔮', '🍬'];
+
 export function BitCheerNotification({ cheer, onComplete }: BitCheerNotificationProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -39,81 +41,69 @@ export function BitCheerNotification({ cheer, onComplete }: BitCheerNotification
   return (
     <div
       className={`
-        text-white rounded-lg shadow-2xl backdrop-blur-xl
-        px-6 py-4 min-w-[320px] max-w-[400px]
-        transition-all duration-300
-        ${isVisible && !isExiting ? 'translate-x-0 opacity-80' : 'translate-x-[450px] opacity-0'}
-        cursor-pointer hover:scale-105
-        border-2
-        relative
+        text-white rounded-lg px-6 py-4 min-w-[320px] max-w-[400px]
+        transition-all duration-500
+        ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-[450px] opacity-0'}
+        cursor-pointer hover:scale-[1.02]
+        relative overflow-hidden
       `}
       style={{
-        background: tier.badgeColor,
-        borderColor: isWhale ? '#ffd700' : tier.color,
+        background: 'linear-gradient(135deg, #1f2d4f 0%, #1b1936 50%, #2f4575 100%)',
+        border: '4px solid #f6ca5d',
+        boxShadow: '0 0 0 4px #0b1021, inset 0 0 0 3px rgba(255,255,255,0.08)',
+        imageRendering: 'pixelated'
       }}
       onClick={handleDismiss}
       role="alert"
       aria-live="polite"
     >
-      <div className="flex items-center gap-3">
-        <div className={`text-4xl ${tier.animation === 'bounce' ? 'animate-bounce' : ''}`}>💎</div>
+      <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(180deg, rgba(255,255,255,0.08) 1px, transparent 1px)', backgroundSize: '12px 12px' }} />
+      <div className="flex items-center gap-3 relative z-10">
+        <div className={`text-4xl drop-shadow-[0_4px_0_#0b1021] ${tier.animation === 'bounce' ? 'animate-bounce' : 'animate-pulse'}`}>💎</div>
         <div className="flex-1">
-          <div className="font-bold text-lg mb-1">
-            {isWhale ? '🐋 WHALE ALERT!' : 'Bit Cheer!'}
+          <div className="font-black text-lg mb-1 tracking-wide text-[#fef3c7] uppercase pixel-font">
+            {isWhale ? 'Mega Bit Rain!' : 'Bit Drop!'}
           </div>
-          <div className="text-sm opacity-90">
-            <span className="font-semibold">{cheer.username}</span>
-            <span className="mx-1">cheered</span>
-            <span className="font-bold text-yellow-300 text-lg">{cheer.amount}</span>
-            <span className="ml-1">bits!</span>
+          <div className="text-sm text-white/90">
+            <span className="font-semibold text-[#ffe066]">{cheer.username}</span>
+            <span className="mx-1">sent</span>
+            <span className="font-black text-xl text-[#b1f0ff]">{cheer.amount}</span>
+            <span className="ml-1">bits</span>
           </div>
           {cheer.message && (
-            <div className="text-xs opacity-80 mt-2 italic">&quot;{cheer.message}&quot;</div>
+            <div className="text-xs text-white/70 mt-2 bg-white/10 px-2 py-1 rounded border border-white/20">
+              &ldquo;{cheer.message}&rdquo;
+            </div>
           )}
-          <div className="text-xs opacity-60 mt-1">{tier.name}</div>
+          <div className="text-[11px] text-white/70 mt-2">{tier.name}</div>
         </div>
       </div>
 
-      {/* Particle effects based on tier */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
-        {[...Array(Math.min(tier.particleCount, 20))].map((_, i) => (
-          <div
+      <div className="absolute inset-0 pointer-events-none">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <span
             key={i}
-            className="absolute text-xs"
+            className="absolute text-lg animate-[pixel-drop_1.2s_ease-in_forwards]"
             style={{
-              top: `${Math.random() * 100}%`,
               left: `${Math.random() * 100}%`,
-              animation: `particle-${tier.animation} ${0.5 + Math.random()}s ease-out`,
-              animationDelay: `${Math.random() * 0.5}s`,
+              top: `${-10 - Math.random() * 20}%`,
+              animationDelay: `${i * 0.08}s`,
             }}
           >
-            💎
-          </div>
+            {PIXEL_DROPS[i % PIXEL_DROPS.length]}
+          </span>
         ))}
       </div>
 
       <style>{`
-        @keyframes particle-bounce {
-          0%, 100% { transform: translateY(0) scale(0); opacity: 0; }
-          50% { transform: translateY(-20px) scale(1); opacity: 1; }
+        .pixel-font {
+          font-family: 'Press Start 2P', 'VT323', system-ui, sans-serif;
         }
-        @keyframes particle-pulse {
-          0%, 100% { transform: scale(0); opacity: 0; }
-          50% { transform: scale(1.5); opacity: 1; }
-        }
-        @keyframes particle-explode {
-          0% { transform: translate(0, 0) scale(1); opacity: 1; }
-          100% { transform: translate(var(--x, 50px), var(--y, -50px)) scale(0); opacity: 0; }
-        }
-        @keyframes particle-fireworks {
-          0% { transform: translate(0, 0) scale(0); opacity: 0; }
-          50% { transform: translate(0, -30px) scale(1); opacity: 1; }
-          100% { transform: translate(var(--x, 30px), -60px) scale(0.5); opacity: 0; }
-        }
-        @keyframes particle-mega-burst {
-          0% { transform: translate(0, 0) scale(0) rotate(0deg); opacity: 0; }
-          50% { transform: translate(0, 0) scale(2); opacity: 1; }
-          100% { transform: translate(var(--x, 60px), var(--y, -60px)) scale(0) rotate(360deg); opacity: 0; }
+        @keyframes pixel-drop {
+          0% { transform: translateY(0) scale(0.6); opacity: 0; }
+          70% { transform: translateY(220px) scale(1); opacity: 1; }
+          85% { transform: translateY(210px) scale(0.9); }
+          100% { transform: translateY(230px) scale(0.95); opacity: 0; }
         }
       `}</style>
     </div>

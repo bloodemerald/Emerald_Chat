@@ -6,6 +6,8 @@ interface BitGiftNotificationProps {
   onComplete?: () => void;
 }
 
+const GIFT_DROPS = ['🎁', '🧧', '💰', '🍭'];
+
 export function BitGiftNotification({ gift, onComplete }: BitGiftNotificationProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
@@ -50,53 +52,69 @@ export function BitGiftNotification({ gift, onComplete }: BitGiftNotificationPro
   return (
     <div
       className={`
-        bg-gradient-to-r from-purple-600/90 to-pink-600/90 backdrop-blur-xl
-        text-white rounded-lg shadow-2xl
-        px-6 py-4 min-w-[320px] max-w-[400px]
-        transition-all duration-300
-        ${isVisible && !isExiting ? 'translate-x-0 opacity-80' : 'translate-x-[450px] opacity-0'}
-        cursor-pointer hover:scale-105
-        border-2 border-purple-400
-        relative
+        text-white rounded-lg px-6 py-4 min-w-[320px] max-w-[400px]
+        transition-all duration-500
+        ${isVisible && !isExiting ? 'translate-x-0 opacity-100' : 'translate-x-[450px] opacity-0'}
+        cursor-pointer hover:scale-[1.02]
+        relative overflow-hidden
       `}
+      style={{
+        background: 'linear-gradient(135deg, #40224d 0%, #6c2e6f 50%, #ff7ab5 100%)',
+        border: '4px solid #ffe6a7',
+        boxShadow: '0 0 0 4px #1a0f24, inset 0 0 0 3px rgba(255,255,255,0.08)',
+        imageRendering: 'pixelated'
+      }}
       onClick={handleDismiss}
       role="alert"
       aria-live="polite"
     >
-      <div className="flex items-center gap-3">
-        <div className="text-4xl animate-bounce">🎁</div>
+      <div className="absolute inset-0 opacity-15" style={{ backgroundImage: 'linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(180deg, rgba(255,255,255,0.08) 1px, transparent 1px)', backgroundSize: '10px 10px' }} />
+      <div className="flex items-center gap-3 relative z-10">
+        <div className="text-4xl drop-shadow-[0_4px_0_#1a0f24] animate-bounce">🎁</div>
         <div className="flex-1">
-          <div className="font-bold text-lg mb-1">Bit Gift!</div>
-          <div className="text-sm opacity-90">
-            <span className="font-semibold">{gift.gifterUsername}</span>
+          <div className="font-black text-lg mb-1 tracking-wide text-[#fef3c7] uppercase pixel-font">Gift Drop!</div>
+          <div className="text-sm text-white/90">
+            <span className="font-semibold text-[#ffe066]">{gift.gifterUsername}</span>
             <span className="mx-1">gifted</span>
-            <span className="font-bold text-yellow-300">{gift.amount} bits</span>
+            <span className="font-black text-[#b6f3ff]">{gift.amount} bits</span>
             <span className="mx-1">to</span>
-            <span className="font-semibold">{gift.recipientUsername}</span>
+            <span className="font-semibold text-[#ffe4f3]">{gift.recipientUsername}</span>
           </div>
           {gift.reason && (
-            <div className="text-xs opacity-75 mt-1">{getReasonText(gift.reason)}</div>
+            <div className="text-xs text-white/70 mt-2 bg-white/10 px-2 py-1 rounded border border-white/20">
+              {getReasonText(gift.reason)}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Sparkle effects */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-lg">
-        {[...Array(8)].map((_, i) => (
-          <div
+      <div className="absolute inset-0 pointer-events-none">
+        {Array.from({ length: 10 }).map((_, i) => (
+          <span
             key={i}
-            className="absolute animate-ping"
+            className="absolute text-lg animate-[pixel-drop_1.3s_ease-in_forwards]"
             style={{
-              top: `${Math.random() * 100}%`,
               left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 2}s`,
-              animationDuration: `${1 + Math.random()}s`,
+              top: `${-10 - Math.random() * 25}%`,
+              animationDelay: `${i * 0.07}s`,
             }}
           >
-            ✨
-          </div>
+            {GIFT_DROPS[i % GIFT_DROPS.length]}
+          </span>
         ))}
       </div>
+
+      <style>{`
+        .pixel-font {
+          font-family: 'Press Start 2P', 'VT323', system-ui, sans-serif;
+        }
+        @keyframes pixel-drop {
+          0% { transform: translateY(0) scale(0.7); opacity: 0; }
+          70% { transform: translateY(220px) scale(1); opacity: 1; }
+          90% { transform: translateY(215px) scale(0.9); }
+          100% { transform: translateY(230px) scale(0.95); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }

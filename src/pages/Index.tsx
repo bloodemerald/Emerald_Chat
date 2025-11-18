@@ -1,4 +1,3 @@
- // Force reload
 import { useState, useEffect, useRef, useCallback, useMemo, startTransition } from "react";
 import { ChatPersonality } from "@/components/ChatPersonality";
 import { ChatHeader } from "@/components/ChatHeader";
@@ -46,13 +45,10 @@ import { userPool, ChatUser } from "@/lib/userPool";
 import { channelPoints } from "@/lib/channelPoints";
 import { bitCheering, BitCheer } from "@/lib/bitCheering";
 import { bitGifting, BitGift } from "@/lib/bitGifting";
-import { subscriptions } from "@/lib/subscriptions";
 import { engagementManager } from "@/lib/engagementManager";
-import { raidManager, RaidEvent, RaidMessage } from "@/lib/raidSystem";
-import { moderators } from "@/lib/moderators";
+import { raidSimulation } from "@/lib/raidSimulation";
 import { moderatorManager } from "@/lib/moderators";
-import { NotificationOverlay } from "@/components/notifications/NotificationOverlay";
-import { RaidOverlay } from "@/components/raid/RaidOverlay";
+import { NotificationOverlay, notifyRaidCelebration } from "@/components/notifications/NotificationOverlay";
 
 const DEFAULT_SETTINGS: ChatSettings = {
   personalities: {
@@ -81,6 +77,12 @@ const DEFAULT_SETTINGS: ChatSettings = {
   pauseOnScroll: true,
   showTimestamps: true,
   enableAutoMod: false,
+  // Sentiment defaults
+  enableSentimentAnalysis: false,
+  showSentimentIndicators: false,
+  highlightPositive: false,
+  highlightNegative: false,
+  sentimentFilter: 'all',
 };
 
 const Index = () => {
@@ -109,7 +111,6 @@ const Index = () => {
   const [showUserHistory, setShowUserHistory] = useState(false);
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const [isLofiMode, setIsLofiMode] = useState(false);
-  const [activeRaid, setActiveRaid] = useState<RaidEvent | null>(null);
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -123,24 +124,51 @@ const Index = () => {
 
   // Extract content keywords from AI messages for context
   const extractContentFromMessages = useCallback((messages: Array<{ message: string; personality: PersonalityType }>): string => {
+    const keywordDetectors: Array<{ keywords: string[]; label: string }> = [
+      { keywords: ["vs code", "vscode", "visual studio code", "windsurf", "cursor"], label: "VS Code / coding workspace" },
+      { keywords: ["unreal", "unity"], label: "Game engine editor" },
+      { keywords: ["figma"], label: "Figma design canvas" },
+      { keywords: ["after effects", "premiere", "davinci"], label: "Video editing timeline" },
+      { keywords: ["valorant", "league", "lol", "apex", "overwatch", "csgo", "minecraft"], label: "Popular game on screen" },
+      { keywords: ["terminal", "shell", "powershell"], label: "Terminal / CLI" },
+    ];
+
     // Look for game names, app names, or specific content identifiers
     const contentPatterns = [
       /\b(\w+(?:\s+\w+)?(?:\s+\d+)?)\s+(working|running|loading|crashed|failed|success|error|bug|fix|update|patch)\b/gi,
       /\b(localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)\b/g,
       /\b(\w+(?:\s+\w+)?)\s+(game|app|software|program|tool|utility)\b/gi,
-      /\b(visual\s+studio|vs\s+code|intellij|eclipse|notepad\+\+|sublime|atom|vim|emacs)\b/gi,
-      /\b(chrome|firefox|safari|edge|browser|web\s+page|website)\b/gi,
+      /\b(visual\s+studio|vs\s+code|intellij|eclipse|notepad\+\+|sublime|atom|vim|emacs|cursor|windsurf)\b/gi,
+      /\b(chrome|firefox|safari|edge|browser|web\s+page|website|tab)\b/gi,
       /\b(windows|mac|linux|ubuntu|terminal|command\s+line|shell|bash|powershell)\b/gi,
-      /\b(react|vue|angular|javascript|typescript|python|java|cpp|c\+\+|html|css|node|npm)\b/gi,
-      /\b(league|valorant|csgo|minecraft|fortnite|apex|overwatch|dota|lol|wow|fifa|nba|nfl)\b/gi,
+      /\b(react|vue|angular|javascript|typescript|python|java|cpp|c\+\+|html|css|node|npm|next\.js)\b/gi,
+      /\b(league|valorant|csgo|minecraft|fortnite|apex|overwatch|dota|lol|wow|fifa|nba|nfl|elden\s+ring|tarkov)\b/gi,
+      /\blooks\s+like\s+(?:it's\s+)?([\w\s:+#.-]{3,40})/gi,
+      /\bthis\s+is\s+([\w\s:+#.-]{3,40})/gi,
+      /\bplaying\s+([\w\s:+#.-]{3,40})/gi,
     ];
 
+    const stripFiller = (text: string) =>
+      text
+        .replace(/\b(working|running|loading|crashed|failed|success|error|bug|fix|update|patch|game|app|software|program|tool|utility|looks|like|it's|its|playing|streaming|watching|tab|window)\b/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
     for (const message of messages) {
+      const normalized = message.message.toLowerCase();
+
+      const keywordMatch = keywordDetectors.find((detector) =>
+        detector.keywords.some((keyword) => normalized.includes(keyword))
+      );
+      if (keywordMatch) {
+        return keywordMatch.label;
+      }
+
       for (const pattern of contentPatterns) {
         const matches = message.message.match(pattern);
         if (matches && matches.length > 0) {
           // Clean up and return the first meaningful match
-          const content = matches[0].replace(/\b(working|running|loading|crashed|failed|success|error|bug|fix|update|patch|game|app|software|program|tool|utility)\b/gi, '').trim();
+          const content = stripFiller(matches[0]);
           if (content.length > 2 && content.length < 50) {
             return content;
           }
@@ -270,6 +298,12 @@ const Index = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showSettings]);
+
+  useEffect(() => {
+    raidSimulation.onRaid((size) => {
+      notifyRaidCelebration(size);
+    });
+  }, []);
 
   // Save messages to localStorage when they change
   useEffect(() => {
@@ -460,6 +494,15 @@ const Index = () => {
 
   const handleSettingsChange = (newSettings: ChatSettings) => {
     setSettings(newSettings);
+  };
+
+  const handleTriggerTestRaid = () => {
+    console.log('🎯 Triggering test raid from UI...');
+    const raidSize = raidSimulation.triggerTestRaid();
+    if (raidSize) {
+      notifyRaidCelebration(raidSize);
+    }
+    toast.success('Test raid triggered! Watch for incoming users.');
   };
   
   // Callbacks for chat sync
@@ -824,13 +867,21 @@ Rules:
           ? `The most recent moderator message was: "${latestModeratorMessage.username}: ${latestModeratorMessage.message}". Prioritize answering this directly while still sounding like natural Twitch chat.`
           : undefined;
 
+        const screenContextHint = detectedContent
+          ? `Latest detected screen content: ${detectedContent}. Confirm what you see or correct it with specifics.`
+          : undefined;
+
+        const combinedAdditionalContext = [moderatorAdditionalContext, screenContextHint]
+          .filter(Boolean)
+          .join(" ") || undefined;
+
         if (shouldAddLurkerJoin(messages.length)) {
           selectedPersonalities[0] = 'lurker';
         }
 
         const shouldBurst = shouldCreateReactionChain(messages);
 
-        let data: { messages: Array<{ message: string; personality: PersonalityType }> } | undefined;
+        let data: { messages: Array<{ message: string; personality: PersonalityType }>; detectedContent?: string } | undefined;
         let error: Error | null = null;
         let usedLocal = false;
 
@@ -857,7 +908,7 @@ Rules:
                   model: settings.ollamaModel,
                   ollamaApiUrl: targetOllamaUrl,
                   batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
-                  additionalContext: moderatorAdditionalContext,
+                  additionalContext: combinedAdditionalContext,
                 }),
                 timeoutPromise
               ]) as { messages: Array<{ message: string; personality: PersonalityType }> };
@@ -903,7 +954,7 @@ Rules:
                 recentChat: recentMessages,
                 personalities: selectedPersonalities,
                 batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
-                additionalContext: moderatorAdditionalContext,
+                additionalContext: combinedAdditionalContext,
               },
             });
             data = geminiResponse.data;
@@ -917,7 +968,7 @@ Rules:
                 recentChat: recentMessages,
                 personalities: selectedPersonalities,
                 batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
-                additionalContext: moderatorAdditionalContext,
+                additionalContext: combinedAdditionalContext,
               },
             });
             data = openRouterResponse.data;
@@ -930,14 +981,18 @@ Rules:
 
         if (data?.messages && Array.isArray(data.messages)) {
           console.log(`✅ AI generated ${data.messages.length} messages`);
-          
-          // Extract content from AI messages for context
-          const extractedContent = extractContentFromMessages(data.messages);
-          if (extractedContent && extractedContent !== detectedContent) {
-            setDetectedContent(extractedContent);
-            console.log(`🎯 Detected content: ${extractedContent}`);
+
+          const normalizedDetected = data.detectedContent && !/unknown/i.test(data.detectedContent)
+            ? data.detectedContent.trim()
+            : undefined;
+          const heuristicContent = normalizedDetected ? undefined : extractContentFromMessages(data.messages);
+          const nextDetectedContent = normalizedDetected || heuristicContent;
+
+          if (nextDetectedContent && nextDetectedContent !== detectedContent) {
+            setDetectedContent(nextDetectedContent);
+            console.log(`🎯 Detected content: ${nextDetectedContent}`);
           }
-          
+
           messageQueueRef.current.push(...data.messages);
           retryCountRef.current = 0;
           isWaitingForAIRef.current = false;
@@ -1014,7 +1069,7 @@ Rules:
       console.warn("⚠️ Skipping this batch after failures, will try again on next cycle");
       toast.warning("Skipped failed batch", { description: "Will retry with next scheduled message. Check Ollama/API setup.", duration: 5000 });
     }
-  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode]);
+  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode, detectedContent]);
 
   // Start generating messages with dynamic timing
   const startGenerating = async () => {
@@ -1360,7 +1415,7 @@ Rules:
               ref={settingsPanelRef}
               className="px-5 py-4 border-b border-gray-200 bg-gray-50 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
             >
-              <SettingsPanel settings={settings} onSettingsChange={handleSettingsChange} />
+              <SettingsPanel settings={settings} onSettingsChange={handleSettingsChange} onTriggerTestRaid={handleTriggerTestRaid} />
             </div>
           )}
 
