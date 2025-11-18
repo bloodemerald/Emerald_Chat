@@ -8,15 +8,9 @@ import { NoChatEmptyState } from "@/components/EmptyState";
 import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
-import { ScreenshotTimeline } from "@/components/ScreenshotTimeline";
-import { PollCreator } from "@/components/PollCreator";
-import { PollMessage } from "@/components/PollMessage";
-import { SentimentStats } from "@/components/SentimentStats";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
-import { Poll } from "@/types/polls";
-import { pollVoting } from "@/lib/pollVoting";
 import { selectPersonality, PERSONALITIES } from "@/lib/personalities";
 import { useChatSync } from "@/hooks/useChatSync";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -44,27 +38,21 @@ import {
   shouldAddLurkerJoin,
   shouldCreateReactionChain,
 } from "@/lib/chatFlow";
-import { isOllamaAvailable, generateWithOllama, generateTextWithOllama, compareScreenshots } from "@/lib/localAI";
+import { isOllamaAvailable, generateWithOllama, generateTextWithOllama } from "@/lib/localAI";
 import { userLifecycle } from "@/lib/userLifecycle";
 import { retroactiveLikes } from "@/lib/retroactiveLikes";
 import { staggeredLikes } from "@/lib/staggeredLikes";
 import { userPool, ChatUser } from "@/lib/userPool";
-import { raidSimulation } from "@/lib/raidSimulation";
-import { analyzeSentiment } from "@/lib/sentimentAnalysis";
 import { channelPoints } from "@/lib/channelPoints";
 import { bitCheering, BitCheer } from "@/lib/bitCheering";
 import { bitGifting, BitGift } from "@/lib/bitGifting";
 import { subscriptions } from "@/lib/subscriptions";
 import { engagementManager } from "@/lib/engagementManager";
+import { raidManager, RaidEvent, RaidMessage } from "@/lib/raidSystem";
+import { moderators } from "@/lib/moderators";
 import { moderatorManager } from "@/lib/moderators";
 import { NotificationOverlay } from "@/components/notifications/NotificationOverlay";
-import {
-  loadScreenshotHistory,
-  addScreenshotFrame,
-  getPreviousFrame,
-  calculateVisualDifference,
-  ScreenshotHistory
-} from "@/lib/screenshotHistory";
+import { RaidOverlay } from "@/components/raid/RaidOverlay";
 
 const DEFAULT_SETTINGS: ChatSettings = {
   personalities: {
@@ -93,12 +81,6 @@ const DEFAULT_SETTINGS: ChatSettings = {
   pauseOnScroll: true,
   showTimestamps: true,
   enableAutoMod: false,
-  // Sentiment Analysis
-  enableSentimentAnalysis: true,
-  showSentimentIndicators: true,
-  sentimentFilter: 'all',
-  highlightPositive: false,
-  highlightNegative: false,
 };
 
 const Index = () => {
@@ -127,17 +109,7 @@ const Index = () => {
   const [showUserHistory, setShowUserHistory] = useState(false);
   const [allUsers, setAllUsers] = useState<ChatUser[]>([]);
   const [isLofiMode, setIsLofiMode] = useState(false);
-  const [screenshotHistory, setScreenshotHistory] = useState<ScreenshotHistory>(() => loadScreenshotHistory());
-  const [showScreenshotTimeline, setShowScreenshotTimeline] = useState(false);
-
-  // Poll system state
-  const [polls, setPolls] = useState<Poll[]>([]);
-  const [showPollCreator, setShowPollCreator] = useState(false);
-  const [userVotes, setUserVotes] = useState<Map<string, string>>(new Map()); // pollId -> optionId
-
-  // Animation state
-  const [newMessageIds, setNewMessageIds] = useState<Set<string>>(new Set());
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [activeRaid, setActiveRaid] = useState<RaidEvent | null>(null);
 
   // Refs
   const chatBoxRef = useRef<HTMLDivElement>(null);
@@ -177,25 +149,6 @@ const Index = () => {
     }
     return "";
   }, []);
-
-  // Helper function to mark a message as new for animation
-  const markMessageAsNew = useCallback((messageId: string) => {
-    setNewMessageIds((prev) => new Set([...prev, messageId]));
-    // Clear the "new" status after animation completes
-    setTimeout(() => {
-      setNewMessageIds((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(messageId);
-        return newSet;
-      });
-    }, 1500); // Duration of entrance animation + highlight
-  }, []);
-
-  // Helper function to add a message with animation
-  const addMessageWithAnimation = useCallback((message: Message) => {
-    setMessages((prev) => [...prev, message]);
-    markMessageAsNew(message.id);
-  }, [markMessageAsNew]);
 
   // Keep message bit badges in sync with user balances (cheers & gifts)
   useEffect(() => {
@@ -367,19 +320,6 @@ const Index = () => {
       );
     });
 
-    // Start poll voting system (AI users voting in polls)
-    pollVoting.start((pollId, username, optionId) => {
-      handleAIVote(pollId, username, optionId);
-    });
-
-    // Start raid simulation (random user influx 1-2 times per 30 min)
-    raidSimulation.start((raidSize) => {
-      toast.success(`🚨 RAID! ${raidSize} viewers incoming!`, {
-        duration: 5000,
-        position: 'top-center',
-      });
-    });
-
     console.log('🎬 User simulation started');
 
     // Join moderators first (high priority)
@@ -389,8 +329,6 @@ const Index = () => {
       userLifecycle.stop();
       retroactiveLikes.stop();
       staggeredLikes.stop();
-      pollVoting.stop();
-      raidSimulation.stop();
       moderatorManager.reset();
       console.log('🛑 User simulation stopped');
     };
@@ -523,22 +461,13 @@ const Index = () => {
   const handleSettingsChange = (newSettings: ChatSettings) => {
     setSettings(newSettings);
   };
-
-  const handleTriggerTestRaid = () => {
-    raidSimulation.triggerTestRaid();
-    toast.success('🎯 Test raid triggered! Watch the viewers flood in!', {
-      duration: 3000,
-      position: 'top-center',
-    });
-  };
-
+  
   // Callbacks for chat sync
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
-    markMessageAsNew(message.id);
     // Schedule staggered likes for this new message
     staggeredLikes.schedulelikesForMessage(message);
-  }, [markMessageAsNew]);
+  }, []);
 
   const handleClearMessages = useCallback(() => {
     setMessages([]);
@@ -697,9 +626,6 @@ const Index = () => {
     // Use persistent users from the user pool
     const chatUser = getOrCreateChatUser(personality);
 
-    // Analyze sentiment if enabled
-    const sentiment = settings.enableSentimentAnalysis ? analyzeSentiment(message) : undefined;
-
     const newMessage: Message = {
       id: `${Date.now()}-${Math.random()}`,
       username: chatUser.username,
@@ -716,14 +642,10 @@ const Index = () => {
       badges: chatUser.badges,
       subscriberMonths: chatUser.subscriberMonths,
       bits: chatUser.bits,
-      sentiment,
     };
 
     setMessages((prev) => {
       const updated = [...prev, newMessage];
-
-      // Mark as new for animation
-      markMessageAsNew(newMessage.id);
 
       // Schedule staggered likes for this new message
       staggeredLikes.schedulelikesForMessage(newMessage);
@@ -737,9 +659,6 @@ const Index = () => {
               const chainUser = getOrCreateChatUser(
                 selectPersonality(settings.personalities)
               );
-              // Analyze sentiment for chain message
-              const chainSentiment = settings.enableSentimentAnalysis ? analyzeSentiment(chainMsg) : undefined;
-
               const chainMessage: Message = {
                 id: `${Date.now()}-${Math.random()}-chain-${idx}`,
                 username: chainUser.username,
@@ -755,10 +674,8 @@ const Index = () => {
                 badges: chainUser.badges,
                 subscriberMonths: chainUser.subscriberMonths,
                 bits: chainUser.bits,
-                sentiment: chainSentiment,
               };
               setMessages((prev) => [...prev, chainMessage]);
-              markMessageAsNew(chainMessage.id);
               broadcastMessage(chainMessage);
               // Schedule likes for chain message
               staggeredLikes.schedulelikesForMessage(chainMessage);
@@ -866,7 +783,6 @@ Rules:
       
       console.log("💬 Adding no-screen message:", newMessage.message);
       setMessages((prev) => [...prev, newMessage]);
-      markMessageAsNew(newMessage.id);
       broadcastMessage(newMessage);
       return;
     }
@@ -1070,13 +986,14 @@ Rules:
           return;
         }
         
-        // After retries, show helpful message
-        toast.error("AI service temporarily unavailable", { 
-          description: "All AI models are rate limited. Try: 1) Wait a minute, 2) Use local Ollama with llava:7b, or 3) Check your API keys.",
-          duration: 15000 
+        // After retries, skip this batch but keep generation loop running
+        console.warn("⚠️ Server error after retries, skipping batch but continuing generation");
+        toast.warning("Server temporarily unavailable", { 
+          description: "Skipped this batch. Will retry with next message. Check Ollama/API setup.",
+          duration: 8000 
         });
         retryCountRef.current = 0;
-        stopGenerating();
+        isWaitingForAIRef.current = false;
         return;
       }
 
@@ -1091,10 +1008,11 @@ Rules:
         return;
       }
 
+      // Reset state but DON'T stop generation - let the scheduled loop continue
       retryCountRef.current = 0;
       isWaitingForAIRef.current = false;
-      stopGenerating();
-      toast.error(ERROR_MESSAGES.AI_GENERATION_FAILED, { description: "Generation stopped after multiple failures. Check console for details.", duration: 10000 });
+      console.warn("⚠️ Skipping this batch after failures, will try again on next cycle");
+      toast.warning("Skipped failed batch", { description: "Will retry with next scheduled message. Check Ollama/API setup.", duration: 5000 });
     }
   }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode]);
 
@@ -1139,52 +1057,11 @@ Rules:
     const activeStream = mediaStreamRef.current;
     if (activeStream) {
       const latestScreenshotRef = { current: screenshot };
-
+      
       captureIntervalRef.current = setInterval(async () => {
         const frame = await captureFrameFromStream(activeStream);
         if (frame) {
           latestScreenshotRef.current = frame;
-
-          // Track screenshot changes in history
-          setScreenshotHistory(prevHistory => {
-            const previousFrame = getPreviousFrame(prevHistory);
-
-            // Compare with previous frame if it exists
-            if (previousFrame) {
-              // Calculate visual difference and get AI description of changes
-              calculateVisualDifference(previousFrame.image, frame).then(async (changeScore) => {
-                console.log(`📊 Visual change score: ${changeScore}%`);
-
-                // Only get AI description if change is significant (> 5%)
-                let changeDescription = undefined;
-                if (changeScore > 5 && settings.aiProvider === 'local') {
-                  try {
-                    changeDescription = await compareScreenshots({
-                      previousScreenshot: previousFrame.image,
-                      currentScreenshot: frame,
-                      model: settings.ollamaModel || 'llava:13b',
-                      ollamaApiUrl: settings.ollamaApiUrl,
-                    });
-                    console.log(`🔍 Change detected: ${changeDescription}`);
-                  } catch (error) {
-                    console.error('Failed to compare screenshots:', error);
-                  }
-                }
-
-                // Add frame to history with change metadata
-                setScreenshotHistory(history =>
-                  addScreenshotFrame(history, frame, detectedContent, changeDescription, changeScore)
-                );
-              });
-
-              // Return current history while async comparison runs
-              return prevHistory;
-            } else {
-              // First frame, no comparison needed
-              return addScreenshotFrame(prevHistory, frame, detectedContent);
-            }
-          });
-
           // Update screenshot state WITHOUT triggering auto-start
           setScreenshot(frame);
           console.log("📸 Screen refreshed for AI context");
@@ -1273,11 +1150,11 @@ Rules:
     const messageElement = document.getElementById(`message-${messageId}`);
     if (messageElement && chatBoxRef.current) {
       messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      // Highlight with animation
-      setHighlightedMessageId(messageId);
+      // Highlight briefly
+      messageElement.classList.add('bg-purple-100');
       setTimeout(() => {
-        setHighlightedMessageId(null);
-      }, 2000);
+        messageElement.classList.remove('bg-purple-100');
+      }, 1500);
     }
   }, []);
 
@@ -1297,97 +1174,9 @@ Rules:
     }
   }, []);
 
-  // Poll handlers
-  const handleCreatePoll = useCallback((poll: Poll) => {
-    setPolls((prev) => [...prev, poll]);
-    toast.success(`Poll created: ${poll.question}`);
-
-    // Schedule AI votes for this poll
-    pollVoting.scheduleVotesForPoll(poll);
-
-    // Set up timer to end poll
-    const timeout = setTimeout(() => {
-      handleEndPoll(poll.id);
-    }, poll.duration * 1000);
-
-    return () => clearTimeout(timeout);
-  }, []);
-
-  const handleVote = useCallback((pollId: string, optionId: string) => {
-    setPolls((prev) =>
-      prev.map((poll) => {
-        if (poll.id !== pollId) return poll;
-        if (poll.status === 'ended') return poll;
-
-        return {
-          ...poll,
-          options: poll.options.map((option) =>
-            option.id === optionId
-              ? {
-                  ...option,
-                  votes: option.votes + 1,
-                  votedBy: [...option.votedBy, 'YOU'],
-                }
-              : option
-          ),
-          totalVotes: poll.totalVotes + 1,
-        };
-      })
-    );
-
-    // Track user vote
-    setUserVotes((prev) => new Map(prev).set(pollId, optionId));
-  }, []);
-
-  const handleAIVote = useCallback((pollId: string, username: string, optionId: string) => {
-    setPolls((prev) =>
-      prev.map((poll) => {
-        if (poll.id !== pollId) return poll;
-        if (poll.status === 'ended') return poll;
-
-        return {
-          ...poll,
-          options: poll.options.map((option) =>
-            option.id === optionId
-              ? {
-                  ...option,
-                  votes: option.votes + 1,
-                  votedBy: [...option.votedBy, username],
-                }
-              : option
-          ),
-          totalVotes: poll.totalVotes + 1,
-        };
-      })
-    );
-  }, []);
-
-  const handleEndPoll = useCallback((pollId: string) => {
-    setPolls((prev) =>
-      prev.map((poll) => {
-        if (poll.id !== pollId) return poll;
-
-        const winningOption = poll.options.reduce((max, option) =>
-          option.votes > max.votes ? option : max
-        );
-
-        return {
-          ...poll,
-          status: 'ended' as const,
-          winnerId: winningOption.id,
-        };
-      })
-    );
-
-    pollVoting.cancelVotesForPoll(pollId);
-  }, []);
-
   // Send moderator message
   const sendModeratorMessage = (text: string) => {
     if (!text.trim()) return;
-
-    // Analyze sentiment if enabled
-    const sentiment = settings.enableSentimentAnalysis ? analyzeSentiment(text) : undefined;
 
     const newMessage: Message = {
       id: `${Date.now()}-${Math.random()}`,
@@ -1405,13 +1194,11 @@ Rules:
       replyToId: replyingTo?.messageId,
       replyToUsername: replyingTo?.username,
       replyToMessage: replyingTo?.message,
-      sentiment,
     };
 
     // Use startTransition to prevent UI freeze
     startTransition(() => {
       setMessages((prev) => [...prev, newMessage]);
-      markMessageAsNew(newMessage.id);
       broadcastMessage(newMessage);
       // Schedule staggered likes for moderator message
       staggeredLikes.schedulelikesForMessage(newMessage);
@@ -1561,13 +1348,10 @@ Rules:
           }`}
         >
           {/* Header */}
-          <ChatHeader
-            viewerCount={viewerCount}
+          <ChatHeader 
+            viewerCount={viewerCount} 
             isLive={isGenerating}
             onOpenUserList={() => setShowUserList(true)}
-            onOpenTimeline={() => setShowScreenshotTimeline(true)}
-            onCreatePoll={() => setShowPollCreator(true)}
-            frameCount={screenshotHistory.frames.length}
           />
 
           {/* Settings Panel */}
@@ -1576,11 +1360,7 @@ Rules:
               ref={settingsPanelRef}
               className="px-5 py-4 border-b border-gray-200 bg-gray-50 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent hover:scrollbar-thumb-gray-400"
             >
-              <SettingsPanel
-                settings={settings}
-                onSettingsChange={handleSettingsChange}
-                onTriggerTestRaid={handleTriggerTestRaid}
-              />
+              <SettingsPanel settings={settings} onSettingsChange={handleSettingsChange} />
             </div>
           )}
 
@@ -1604,89 +1384,38 @@ Rules:
               </div>
             )}
 
-            {/* Sentiment Stats */}
-            {settings.enableSentimentAnalysis && messages.length > 0 && (
-              <div className="sticky top-2 left-2 right-2 z-10 mb-2 mx-2">
-                <SentimentStats messages={messages} />
-              </div>
-            )}
-
             {showEmptyState ? (
               <NoChatEmptyState />
             ) : (
               (() => {
                 // Find the message with the most likes for bubble effect
-                const mostLikedMessage = messages.reduce((max, msg) =>
+                const mostLikedMessage = messages.reduce((max, msg) => 
                   (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
                 , messages[0]);
-
-                // Filter messages by sentiment if enabled
-                const filteredMessages = settings.sentimentFilter && settings.sentimentFilter !== 'all'
-                  ? messages.filter(msg => msg.sentiment?.label === settings.sentimentFilter)
-                  : messages;
-
-                // Combine messages and polls, sorted by timestamp
-                const messagesWithTimestamps = filteredMessages.map(msg => ({
-                  type: 'message' as const,
-                  data: msg,
-                  timestamp: new Date(msg.timestamp).getTime() || 0,
-                }));
-
-                const pollsWithTimestamps = polls.map(poll => ({
-                  type: 'poll' as const,
-                  data: poll,
-                  timestamp: poll.createdAt,
-                }));
-
-                const combined = [...messagesWithTimestamps, ...pollsWithTimestamps]
-                  .sort((a, b) => a.timestamp - b.timestamp);
-
-                return combined.map((item) => {
-                  if (item.type === 'message') {
-                    const msg = item.data;
-                    const isNew = newMessageIds.has(msg.id);
-                    const isHighlighted = highlightedMessageId === msg.id;
-
-                    return (
-                      <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
-                        <ChatPersonality
-                          message={msg}
-                          settings={settings}
-                          isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
-                          isLofiMode={isLofiMode}
-                          isNew={isNew}
-                          isHighlighted={isHighlighted}
-                          animationStyle="bottom"
-                          onLike={(messageId) => {
-                            setMessages((prev) =>
-                              prev.map((m) =>
-                                m.id === messageId
-                                  ? { ...m, likes: (m.likes ?? 0) + 1 }
-                                  : m
-                              )
-                            );
-                          }}
-                          onReply={handleReply}
-                          onJumpToMessage={handleJumpToMessage}
-                          onViewHistory={handleViewHistory}
-                          onViewProfile={handleViewProfile}
-                        />
-                      </div>
-                    );
-                  } else {
-                    const poll = item.data;
-                    return (
-                      <div key={poll.id}>
-                        <PollMessage
-                          poll={poll}
-                          onVote={handleVote}
-                          hasVoted={userVotes.has(poll.id)}
-                          userVote={userVotes.get(poll.id)}
-                        />
-                      </div>
-                    );
-                  }
-                });
+                
+                return messages.map((msg) => (
+                  <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
+                    <ChatPersonality
+                      message={msg}
+                      settings={settings}
+                      isMostPopular={msg.id === mostLikedMessage?.id && (msg.likes ?? 0) >= 3}
+                      isLofiMode={isLofiMode}
+                      onLike={(messageId) => {
+                        setMessages((prev) =>
+                          prev.map((m) =>
+                            m.id === messageId
+                              ? { ...m, likes: (m.likes ?? 0) + 1 }
+                              : m
+                          )
+                        );
+                      }}
+                      onReply={handleReply}
+                      onJumpToMessage={handleJumpToMessage}
+                      onViewHistory={handleViewHistory}
+                      onViewProfile={handleViewProfile}
+                    />
+                  </div>
+                ));
               })()
             )}
           </div>
@@ -1745,21 +1474,6 @@ Rules:
           setShowUserHistory(false);
           setSelectedUser(null);
         }}
-      />
-
-      {/* Screenshot Timeline */}
-      {showScreenshotTimeline && (
-        <ScreenshotTimeline
-          history={screenshotHistory}
-          onClose={() => setShowScreenshotTimeline(false)}
-        />
-      )}
-
-      {/* Poll Creator */}
-      <PollCreator
-        isOpen={showPollCreator}
-        onClose={() => setShowPollCreator(false)}
-        onCreate={handleCreatePoll}
       />
     </div>
   );

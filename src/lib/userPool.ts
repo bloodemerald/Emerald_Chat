@@ -356,6 +356,23 @@ class UserPool {
   }
 
   /**
+   * Add a user to the pool (bypasses normal initialization)
+   */
+  addUser(user: ChatUser): void {
+    // Check for duplicate username
+    if (this.hasUsername(user.username)) {
+      console.warn(`⚠️ Username ${user.username} already exists, skipping`);
+      return;
+    }
+    
+    // Add to pool
+    this.users.set(user.id, user);
+    this.usernameSet.add(user.username);
+    console.log(`✅ Added ${user.username} to user pool (State: ${user.state}, Personality: ${user.personality})`);
+    console.log(`📊 Total users: ${this.users.size}, Active users: ${this.getActiveUsers().length}`);
+  }
+
+  /**
    * Add a moderator user to the pool (bypasses normal initialization)
    */
   addModeratorUser(user: ChatUser): void {
