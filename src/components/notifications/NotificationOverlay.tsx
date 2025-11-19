@@ -37,7 +37,11 @@ interface NotificationOverlayProps {
  * Main Notification Overlay Component
  * Manages queue and display of all notification types
  */
-export function NotificationOverlay({ maxVisible = 3 }: NotificationOverlayProps) {
+import { tts } from '@/lib/tts';
+
+// ... imports
+
+export function NotificationOverlay({ maxVisible = 5, side = 'right' }: NotificationOverlayProps & { side?: 'left' | 'right' }) {
   const [queue, setQueue] = useState<Notification[]>([]);
   const [visible, setVisible] = useState<Notification[]>([]);
   const [raidCelebration, setRaidCelebration] = useState<RaidCelebrationPayload | null>(null);
@@ -47,6 +51,23 @@ export function NotificationOverlay({ maxVisible = 3 }: NotificationOverlayProps
    */
   const addNotification = (notification: Notification) => {
     setQueue((prev) => [...prev, notification]);
+
+    // Trigger TTS based on type
+    let text = "";
+    if (notification.type === 'bit_gift') {
+      const data = notification.data as BitGift;
+      text = `${data.gifterUsername} gifted ${data.amount} bits to ${data.recipientUsername}!`;
+    } else if (notification.type === 'bit_cheer') {
+      const data = notification.data as BitCheer;
+      text = `${data.username} cheered ${data.amount} bits: ${data.message}`;
+    } else if (notification.type === 'subscription') {
+      const data = notification.data as SubEvent;
+      text = `${data.username} subscribed for ${data.months} months!`;
+    }
+
+    if (text) {
+      tts.speak(text);
+    }
   };
 
   /**
@@ -73,14 +94,27 @@ export function NotificationOverlay({ maxVisible = 3 }: NotificationOverlayProps
   const renderNotification = (notification: Notification, index: number) => {
     const onComplete = () => removeNotification(notification.id);
 
-    // Calculate vertical position (stacked) - using rem for top-4 = 1rem = 16px
-    const topOffset = 16 + index * 130; // 16px base + 130px spacing per notification
+    // Compact Cascading Stack Effect
+    // New items appear at the top, older items slide down and fade out
+
+    // Tighter spacing: 80px base + 70px per item (overlapping cards)
+    const topOffset = 80 + index * 70;
+
+    // Scale down older items slightly
+    const scale = 1 - (index * 0.05);
+    // Fade out older items
+    const opacity = 1 - (index * 0.15);
 
     const wrapperStyle = {
       top: `${topOffset}px`,
-      position: 'relative' as const,
-      marginBottom: '1rem',
-      pointerEvents: 'auto' as const,
+      position: 'absolute' as const, // Absolute for stacking
+      left: side === 'left' ? '20px' : 'auto',
+      right: side === 'right' ? '20px' : 'auto',
+      zIndex: 100 - index, // Newer items on top
+      transform: `scale(${scale})`,
+      opacity: opacity,
+      transition: 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)', // Bouncy transition
+      pointerEvents: index === 0 ? 'auto' as const : 'none' as const, // Only top item interactive
     };
 
     switch (notification.type) {
@@ -151,7 +185,7 @@ export function NotificationOverlay({ maxVisible = 3 }: NotificationOverlayProps
 
   return (
     <>
-      <div className="notification-overlay fixed top-0 right-0 pointer-events-none z-50">
+      <div className={`notification-overlay fixed top-0 ${side === 'left' ? 'left-0' : 'right-0'} pointer-events-none z-[100]`}>
         {visible.map((notification, index) => renderNotification(notification, index))}
       </div>
       {raidCelebration && (

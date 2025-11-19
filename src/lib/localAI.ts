@@ -147,6 +147,8 @@ CRITICAL RULES:
 - If nothing is obvious, acknowledge uncertainty ("cant tell what app this is").
 - If text is too small/blurry, DO NOT complain. Instead, react to the layout, colors, or overall vibe. Guess the context if possible.
 - NEVER say "text is unreadable", "resolution is low", or "cant read". Just try your best or make a joke.
+- If you are the 'backseat' personality and see a game, you can search for tips. Write exactly: "TOOL:SEARCH: <game name> tips" as one of your messages.
+- Only use the search tool if you are 100% sure of the game name.
 
 GOOD EXAMPLES:
 "dark reddit theme clean"
@@ -223,6 +225,34 @@ Write ${batchSize} SHORT messages now:`;
       lines.pop();
     }
 
+    // Check for Tool Calls (MCP Lite)
+    const toolCall = lines.find((line: string) => line.startsWith("TOOL:SEARCH:"));
+    if (toolCall) {
+      console.log("🛠️ Tool Call Detected:", toolCall);
+      const query = toolCall.replace("TOOL:SEARCH:", "").trim();
+
+      // Import dynamically to avoid circular dependencies if any
+      const { searchWeb } = await import("./webSearch");
+      const searchResults = await searchWeb(query);
+
+      if (searchResults.length > 0) {
+        console.log("🔍 Search Results found, re-generating with context...");
+        const contextString = searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n");
+
+        // Recursive call with added context
+        // We remove the tool call instruction to prevent infinite loops
+        return generateWithOllama({
+          screenshot,
+          recentChat,
+          personalities,
+          model,
+          ollamaApiUrl,
+          batchSize,
+          additionalContext: `\n\nSEARCH RESULTS FOR "${query}":\n${contextString}\n\nUse this info to write smarter messages.`
+        });
+      }
+    }
+
     const messages = lines
       .map((line: string) => {
         let cleaned = line.trim();
@@ -234,7 +264,7 @@ Write ${batchSize} SHORT messages now:`;
         cleaned = cleaned.replace(/^\w+\s*[-:]\s*["']?/i, ''); // Remove "toxic: " or "Lurker - "
         return cleaned;
       })
-      .filter((line: string) => line.length > 0 && line.length <= 140)
+      .filter((line: string) => line.length > 0 && line.length <= 140 && !line.startsWith("TOOL:SEARCH:"))
       .slice(0, batchSize);
 
     const results = messages.map((message: string, index: number) => ({
@@ -252,7 +282,7 @@ Write ${batchSize} SHORT messages now:`;
  * Compare two screenshots and describe what changed between them using vision AI
  */
 export async function compareScreenshots({
-  previousScreenshot,
+  previousScreenshot: _previousScreenshot,
   currentScreenshot,
   model = "llava:13b",
   ollamaApiUrl,
