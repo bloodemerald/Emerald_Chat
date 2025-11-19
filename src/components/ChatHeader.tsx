@@ -48,7 +48,7 @@ export const ChatHeader = ({
               />
               {detectedContent && (
                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5 backdrop-blur-md">
-                  <p className="text-[8px] text-white/90 font-medium leading-tight truncate">
+                  <p className="text-[10px] text-white/90 font-medium leading-tight truncate">
                     {detectedContent}
                   </p>
                 </div>
