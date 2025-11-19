@@ -49,6 +49,7 @@ import { engagementManager } from "@/lib/engagementManager";
 import { raidSimulation } from "@/lib/raidSimulation";
 import { moderatorManager } from "@/lib/moderators";
 import { NotificationOverlay, notifyRaidCelebration } from "@/components/notifications/NotificationOverlay";
+import { ChatAnimations, ChatAnimationRef } from "@/components/ChatAnimations";
 
 const DEFAULT_SETTINGS: ChatSettings = {
   personalities: {
@@ -121,6 +122,7 @@ const Index = () => {
   const messageQueueRef = useRef<Array<{ message: string; personality: PersonalityType }>>([]);
   const retryCountRef = useRef(0);
   const isWaitingForAIRef = useRef(false);
+  const animationRef = useRef<ChatAnimationRef>(null);
 
   // Extract content keywords from AI messages for context
   const extractContentFromMessages = useCallback((messages: Array<{ message: string; personality: PersonalityType }>): string => {
@@ -381,26 +383,26 @@ const Index = () => {
     channelPoints.onRedemption((effect) => {
       console.log(`🎯🎯🎯 CHANNEL POINT EFFECT: ${effect.type} by ${effect.userId}`);
       console.log(`Target message: ${effect.targetMessage}, Target user: ${effect.targetUser}`);
-      
+
       // Effect will be applied to the target message
-      
+
       // Apply effect to target message or user
       setMessages((currentMessages) => {
         console.log(`🔍 Looking for target in ${currentMessages.length} messages`);
         console.log(`🔍 Target user: ${effect.targetUser}, Target message: ${effect.targetMessage}`);
-        
+
         let foundTarget = false;
         const result = currentMessages.map((msg) => {
-          
+
           // Check if this message is the target
-          const isTarget = effect.targetMessage === msg.id || 
-                          (effect.targetUser && msg.username === effect.targetUser);
-          
+          const isTarget = effect.targetMessage === msg.id ||
+            (effect.targetUser && msg.username === effect.targetUser);
+
           if (isTarget) {
             foundTarget = true;
             console.log(`✅✅✅ APPLYING ${effect.type} to "${msg.message.substring(0, 30)}..." by ${msg.username}`);
             const effectDuration = effect.duration || 30000; // Default 30 seconds
-            
+
             if (effect.type === 'super_like') {
               // Super like adds instant likes AND visual shake effect
               return {
@@ -422,14 +424,14 @@ const Index = () => {
           // No channel point updates needed in chat view
           return msg;
         });
-        
+
         if (!foundTarget) {
           console.warn(`⚠️ Could not find target for ${effect.type} effect!`);
         }
-        
+
         return result;
       });
-      
+
       // Notification is handled by the engagement manager
     });
   }, []);
@@ -440,20 +442,20 @@ const Index = () => {
       const users = userPool.getAllUsers();
       const activeUsers = users.filter(u => u.state === 'lurking' || u.state === 'active');
       console.log(`👥 User sync: ${users.length} total, ${activeUsers.length} active viewers`);
-      
+
       // Only update if users actually changed to prevent unnecessary re-renders
       setAllUsers(prevUsers => {
         if (prevUsers.length !== users.length) return users;
-        
+
         // Check if any user state changed
         const hasChanges = users.some((user, index) => {
           const prevUser = prevUsers[index];
-          return !prevUser || 
-            prevUser.state !== user.state || 
+          return !prevUser ||
+            prevUser.state !== user.state ||
             prevUser.messageCount !== user.messageCount ||
             prevUser.lastActivityTime !== user.lastActivityTime;
         });
-        
+
         return hasChanges ? users : prevUsers;
       });
     };
@@ -504,7 +506,7 @@ const Index = () => {
     }
     toast.success('Test raid triggered! Watch for incoming users.');
   };
-  
+
   // Callbacks for chat sync
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
@@ -605,7 +607,7 @@ const Index = () => {
       // Monitor if user stops sharing
       stream.getVideoTracks()[0].onended = async () => {
         console.log("User stopped screen sharing");
-        
+
         // Generate contextual message about stream ending
         const message = await generateContextualMessage('stream_ended', 'lurker');
         const lurkerUser = getOrCreateChatUser('lurker');
@@ -625,11 +627,11 @@ const Index = () => {
           subscriberMonths: lurkerUser.subscriberMonths,
           bits: lurkerUser.bits,
         };
-        
+
         setMessages((prev) => [...prev, endMessage]);
         broadcastMessage(endMessage);
         staggeredLikes.schedulelikesForMessage(endMessage);
-        
+
         stopStreaming();
         toast.info("Screen sharing stopped");
       };
@@ -692,6 +694,19 @@ const Index = () => {
 
       // Schedule staggered likes for this new message
       staggeredLikes.schedulelikesForMessage(newMessage);
+
+      // Trigger animations for hype messages
+      const hypeKeywords = ["W", "L", "POG", "OMEGALUL", "KEKW", "HYPE", "GG", "EZ", "CLUTCH", "WTF", "OMG", "NOOO", "YOOO"];
+      const isHype = hypeKeywords.some(k => message.toUpperCase().includes(k)) || (message === message.toUpperCase() && message.length > 5);
+
+      if (isHype) {
+        // Extract the hype word or use the whole message if short
+        const hypeText = message.length < 15 ? message : hypeKeywords.find(k => message.toUpperCase().includes(k)) || "HYPE";
+        animationRef.current?.addFloatingText(hypeText, 'hype');
+      } else if (Math.random() < 0.1) {
+        // Random chance for normal floating text
+        animationRef.current?.addFloatingText(message.substring(0, 20), 'normal');
+      }
 
       // Check if this message should trigger a copypasta chain
       if (shouldTriggerCopypasta(message)) {
@@ -761,11 +776,11 @@ const Index = () => {
 
     try {
       const useLocal = settings.aiProvider === 'local' || settings.aiProvider === 'auto';
-      
+
       if (useLocal) {
         const targetOllamaUrl = settings.ollamaApiUrl;
         const ollamaAvailable = await isOllamaAvailable(targetOllamaUrl);
-        
+
         if (ollamaAvailable) {
           const prompt = `Generate ONE realistic Twitch chat message about ${context.replace('_', ' ')}. 
 
@@ -786,14 +801,14 @@ Rules:
             model: settings.ollamaModel,
             ollamaApiUrl: targetOllamaUrl,
           });
-          
+
           return message || examples[context][Math.floor(Math.random() * examples[context].length)];
         }
       }
     } catch (error) {
       console.warn("Failed to generate contextual message, using fallback:", error);
     }
-    
+
     // Fallback to random selection if AI fails
     return examples[context][Math.floor(Math.random() * examples[context].length)];
   }, [settings.aiProvider, settings.ollamaApiUrl, settings.ollamaModel]);
@@ -801,7 +816,7 @@ Rules:
   // Generate batch of chat messages with rate limiting and retry logic
   const generateChatMessageBatch = useCallback(async () => {
     console.log("🎬 generateChatMessageBatch called", { hasScreenshot: !!screenshot, queueLength: messageQueueRef.current.length });
-    
+
     if (!screenshot) {
       console.log("⚠️ No screenshot available, generating contextual message");
       // Generate contextual message about screen issues
@@ -823,7 +838,7 @@ Rules:
         subscriberMonths: helpfulUser.subscriberMonths,
         bits: helpfulUser.bits,
       };
-      
+
       console.log("💬 Adding no-screen message:", newMessage.message);
       setMessages((prev) => [...prev, newMessage]);
       broadcastMessage(newMessage);
@@ -835,7 +850,7 @@ Rules:
       displayNextQueuedMessage();
       return;
     }
-    
+
     // Prevent multiple simultaneous AI calls
     if (isWaitingForAIRef.current) {
       console.log("⏳ Already waiting for AI response, skipping duplicate call");
@@ -894,12 +909,12 @@ Rules:
           if (ollamaAvailable) {
             try {
               console.log("🤖 Attempting local Ollama generation...");
-              
+
               // Add timeout to prevent infinite waiting (90s for llava:13b)
-              const timeoutPromise = new Promise((_, reject) => 
+              const timeoutPromise = new Promise((_, reject) =>
                 setTimeout(() => reject(new Error('Ollama timeout after 90s - model may be too slow or out of memory')), 90000)
               );
-              
+
               data = await Promise.race([
                 generateWithOllama({
                   screenshot,
@@ -922,7 +937,7 @@ Rules:
               if (settings.aiProvider === 'local') {
                 const errorMessage = ollamaError instanceof Error ? ollamaError.message : String(ollamaError);
                 toast.error("Local Ollama failed", {
-                  description: errorMessage.includes('timeout') 
+                  description: errorMessage.includes('timeout')
                     ? "Model is too slow. Try: 1) Use llava:7b instead of llava:13b, 2) Use llama3.2:3b for text-only, or 3) Check Ollama is running"
                     : "Check your Ollama setup and model.",
                   duration: 12000
@@ -1027,25 +1042,25 @@ Rules:
         return;
       } else if (errorStatus === 500 || errorStatus === 503) {
         console.error("Full error object:", error);
-        
+
         // Check if we should retry or give up
         if (retryCountRef.current < 2) {
           retryCountRef.current++;
-          toast.warning(`AI service issue (attempt ${retryCountRef.current}/2)`, { 
+          toast.warning(`AI service issue (attempt ${retryCountRef.current}/2)`, {
             description: "Retrying with different model...",
-            duration: 5000 
+            duration: 5000
           });
           setTimeout(() => {
             generateChatMessageBatch();
           }, 2000);
           return;
         }
-        
+
         // After retries, skip this batch but keep generation loop running
         console.warn("⚠️ Server error after retries, skipping batch but continuing generation");
-        toast.warning("Server temporarily unavailable", { 
+        toast.warning("Server temporarily unavailable", {
           description: "Skipped this batch. Will retry with next message. Check Ollama/API setup.",
-          duration: 8000 
+          duration: 8000
         });
         retryCountRef.current = 0;
         isWaitingForAIRef.current = false;
@@ -1074,12 +1089,12 @@ Rules:
   // Start generating messages with dynamic timing
   const startGenerating = async () => {
     console.log("🚀 startGenerating called", { isGenerating, hasScreenshot: !!screenshot, hasMediaStream: !!mediaStream });
-    
+
     // Force reset all state when manually starting (fix stuck states)
     isWaitingForAIRef.current = false;
     retryCountRef.current = 0;
     messageQueueRef.current = [];
-    
+
     if (isGenerating) {
       console.log("⏭️ Already generating, forcing restart...");
       // Force restart to fix stuck state
@@ -1112,7 +1127,7 @@ Rules:
     const activeStream = mediaStreamRef.current;
     if (activeStream) {
       const latestScreenshotRef = { current: screenshot };
-      
+
       captureIntervalRef.current = setInterval(async () => {
         const frame = await captureFrameFromStream(activeStream);
         if (frame) {
@@ -1124,7 +1139,7 @@ Rules:
           // If frame capture fails, users should realistically comment
           console.warn("⚠️ Failed to capture new frame");
         }
-      }, 15000); // Capture new frame every 15 seconds (OPTIMIZED)
+      }, 5000); // Capture new frame every 5 seconds (OPTIMIZED for real-time reactions)
     }
 
     // Use dynamic timing instead of fixed interval
@@ -1174,7 +1189,7 @@ Rules:
 
   // Auto-start generation when screenshot is captured via Play button (ONLY on initial capture)
   const hasStartedRef = useRef(false);
-  
+
   useEffect(() => {
     if (screenshot && !isGenerating && !isCapturing && !hasStartedRef.current) {
       hasStartedRef.current = true;
@@ -1185,7 +1200,7 @@ Rules:
 
       return () => clearTimeout(timer);
     }
-    
+
     // Reset flag when screenshot is cleared
     if (!screenshot) {
       hasStartedRef.current = false;
@@ -1299,18 +1314,26 @@ Rules:
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && isGenerating) {
         console.log('👁️ Tab became visible, checking generation state...');
-        
+
         // Reset stuck flags that might prevent generation
         if (isWaitingForAIRef.current) {
           console.log('🔄 Resetting stuck AI generation flag');
           isWaitingForAIRef.current = false;
         }
-        
+
         // Restart generation if it was suspended
         if (!intervalRef.current && screenshot) {
           console.log('🚀 Restarting generation after tab suspension');
           generateChatMessageBatch();
         }
+      } else if (document.visibilityState === 'hidden' && isGenerating) {
+        console.log('🙈 Tab hidden, pausing generation to save resources');
+        // Optional: Pause generation when hidden to prevent "starting soon" loops if video pauses
+        // For now, we keep it running but maybe slow it down?
+        // Actually, let's just log it. The user specifically mentioned minimizing causes issues.
+        // If the video pauses when minimized, the AI sees a static frame.
+        // We can't easily detect if the video is playing vs paused from a screenshot alone without comparing frames.
+        // But we can rely on the "NEVER say starting soon" prompt fix.
       }
     };
 
@@ -1373,11 +1396,10 @@ Rules:
 
   return (
     <div
-      className={`h-screen flex overflow-hidden bg-gradient-to-br ${
-        isLofiMode
-          ? "from-slate-950 via-slate-900 to-slate-950"
-          : "from-background via-background-deep to-background"
-      }`}
+      className={`h-screen flex overflow-hidden bg-gradient-to-br ${isLofiMode
+        ? "from-slate-950 via-slate-900 to-slate-950"
+        : "from-background via-background-deep to-background"
+        }`}
     >
       {/* Notification Overlay for bits, subs, channel points */}
       <NotificationOverlay />
@@ -1386,27 +1408,31 @@ Rules:
       <div className="w-full h-full relative">
         {/* Subtle Cyber Glow Effect */}
         <div className="absolute top-0 left-0 w-[50px] h-[50px] opacity-20 blur-md pointer-events-none"
-             style={{
-               background: 'radial-gradient(ellipse at center, hsl(var(--primary)), rgba(0, 255, 255, 0.2), transparent)'
-             }}
+          style={{
+            background: 'radial-gradient(ellipse at center, hsl(var(--primary)), rgba(0, 255, 255, 0.2), transparent)'
+          }}
         />
         <div className="absolute bottom-0 right-0 w-[50px] h-[50px] opacity-20 blur-md pointer-events-none"
-             style={{
-               background: 'radial-gradient(ellipse at center, hsl(var(--secondary)), rgba(255, 0, 255, 0.2), transparent)'
-             }}
+          style={{
+            background: 'radial-gradient(ellipse at center, hsl(var(--secondary)), rgba(255, 0, 255, 0.2), transparent)'
+          }}
         />
+
+        {/* Chat Animations Overlay */}
+        <ChatAnimations ref={animationRef} />
 
         {/* Fullscreen Card Container */}
         <div
-          className={`w-full h-full card-shadow overflow-hidden flex flex-col ${
-            isLofiMode ? "bg-slate-900/95 text-slate-50" : "bg-white"
-          }`}
+          className={`w-full h-full card-shadow overflow-hidden flex flex-col ${isLofiMode ? "bg-slate-900/95 text-slate-50" : "bg-white"
+            }`}
         >
           {/* Header */}
-          <ChatHeader 
-            viewerCount={viewerCount} 
+          <ChatHeader
+            viewerCount={viewerCount}
             isLive={isGenerating}
             onOpenUserList={() => setShowUserList(true)}
+            screenshot={isGenerating ? screenshot : null}
+            detectedContent={detectedContent}
           />
 
           {/* Settings Panel */}
@@ -1422,9 +1448,8 @@ Rules:
           {/* Chat Messages Container - Takes full height */}
           <div
             ref={chatBoxRef}
-            className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative bg-gradient-to-b ${
-              isLofiMode ? "from-slate-900/80 to-slate-950/80" : "from-gray-50 to-gray-100"
-            }`}
+            className={`flex-1 overflow-y-auto overflow-x-hidden pb-2 scrollbar-thin scrollbar-thumb-emerald-400 scrollbar-track-gray-100 hover:scrollbar-thumb-emerald-500 active:scrollbar-thumb-emerald-600 relative bg-gradient-to-b ${isLofiMode ? "from-slate-900/80 to-slate-950/80" : "from-gray-50 to-gray-100"
+              }`}
             role="log"
             aria-live="polite"
             aria-label="Chat messages"
@@ -1444,10 +1469,10 @@ Rules:
             ) : (
               (() => {
                 // Find the message with the most likes for bubble effect
-                const mostLikedMessage = messages.reduce((max, msg) => 
+                const mostLikedMessage = messages.reduce((max, msg) =>
                   (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
-                , messages[0]);
-                
+                  , messages[0]);
+
                 return messages.map((msg) => (
                   <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
                     <ChatPersonality
@@ -1476,11 +1501,10 @@ Rules:
           </div>
 
           {/* Input Container */}
-          <div className={`p-4 bg-gradient-to-b border-t shadow-[0_-2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] ${
-            isLofiMode 
-              ? "from-slate-800 to-slate-900/30 border-slate-700" 
-              : "from-white to-gray-50/30 border-gray-200"
-          }`}>
+          <div className={`p-4 bg-gradient-to-b border-t shadow-[0_-2px_8px_rgba(0,0,0,0.04),inset_0_1px_1px_rgba(255,255,255,0.8)] ${isLofiMode
+            ? "from-slate-800 to-slate-900/30 border-slate-700"
+            : "from-white to-gray-50/30 border-gray-200"
+            }`}>
             <ChatInput
               onSendMessage={sendModeratorMessage}
               isGenerating={isGenerating}

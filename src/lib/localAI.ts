@@ -107,10 +107,10 @@ export async function generateWithOllama({
   ollamaApiUrl?: string;
   batchSize?: number;
   additionalContext?: string;
-}): Promise<{ 
+}): Promise<{
   messages: Array<{ message: string; personality: PersonalityType }>;
   detectedContent?: string;
- }> {
+}> {
   try {
     const baseUrl = getOllamaBaseUrl(ollamaApiUrl);
 
@@ -128,13 +128,17 @@ export async function generateWithOllama({
       : "";
 
     // Enhanced prompt for specific, contextual reactions
-    const visionPrompt = `You are ${batchSize} different viewers watching the streamer's current screen. Write ${batchSize} SHORT chat messages about what you actually see.
+    const visionPrompt = `You are ${batchSize} different viewers watching the streamer's current screen RIGHT NOW. Write ${batchSize} SHORT chat messages about what is happening in this EXACT MOMENT.
 
 CRITICAL RULES:
 - Output ONLY ${batchSize} chat messages, one per line.
 - Each message MUST be under 100 characters.
 - NO descriptions, NO explanations, NO paragraphs.
 - Write like REAL stream chat - casual, imperfect, short.
+- NO descriptions, NO explanations, NO paragraphs.
+- Write like REAL stream chat - casual, imperfect, short.
+- REACT IMMEDIATELY to what is on screen. If something is loading, say "loading". If it's a bug, say "bug".
+- NEVER say "starting soon" or "waiting for stream" if there is ANY video/game/content visible.
 - Reference the real application/website/game only if you can see reliable evidence (logos, UI elements, text). If you're unsure, react to what is clearly visible (colors, layout, text snippets) instead of guessing.
 - Treat browsers, Reddit, YouTube, coding IDEs, docs, and desktop screens as first-class contexts. Never assume a video game unless you actually see one.
 - When it's a coding IDE, mention languages/files/errors/themes instead of "blank screen" comments.
