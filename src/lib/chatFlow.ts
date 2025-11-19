@@ -1,5 +1,6 @@
 import { Message, PersonalityType } from "@/types/personality";
 import { userPool, ChatUser } from './userPool';
+import { useRaidBossStore } from './raidBossStore';
 
 /**
  * Get a user from the pool to send a message
@@ -7,25 +8,25 @@ import { userPool, ChatUser } from './userPool';
  */
 export function getOrCreateChatUser(personality: PersonalityType): ChatUser {
   const user = userPool.getRandomActiveUser(personality);
-  
+
   if (user) {
     return user;
   }
-  
+
   // Fallback: activate a lurker if no active users of this type
   userPool.activateLurker();
   const fallbackUser = userPool.getRandomActiveUser(personality);
-  
+
   if (fallbackUser) {
     return fallbackUser;
   }
-  
+
   // Last resort: get any active user
   const anyUser = userPool.getRandomActiveUser();
   if (anyUser) {
     return anyUser;
   }
-  
+
   // Shouldn't happen, but fallback to a minimal user object
   // This should be extremely rare as the user pool always has users
   return {
@@ -44,7 +45,13 @@ export function getOrCreateChatUser(personality: PersonalityType): ChatUser {
     avatarEmoji: '😀',
     bio: 'New user',
     profileColor: '#9e9e9e',
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    moderation: {
+      isBanned: false,
+      isTimedOut: false,
+      warnings: 0,
+      modActions: []
+    }
   };
 }
 
@@ -163,8 +170,8 @@ export function detectExcitementLevel(recentMessages: Message[]): 'high' | 'medi
 export function shouldAddLurkerJoin(messagesSinceStart: number): boolean {
   // Random chance for lurkers to "join" every 20-40 messages
   return messagesSinceStart > 0 &&
-         messagesSinceStart % Math.floor(20 + Math.random() * 20) === 0 &&
-         Math.random() < 0.6;
+    messagesSinceStart % Math.floor(20 + Math.random() * 20) === 0 &&
+    Math.random() < 0.6;
 }
 
 /**
@@ -232,6 +239,18 @@ export function shouldAILikeMessage(message: Message): boolean {
   // Cap at 0.98 max probability for near-constant likes
   probability = Math.min(probability, 0.98);
 
+  // Check for boss damage
+  const attackKeywords = ['!attack', 'hit', 'damage', 'fireball', 'strike', 'slash'];
+  const isAttack = attackKeywords.some(keyword => text.includes(keyword));
+
+  if (isAttack) {
+    // 30% chance to hit the boss
+    if (Math.random() < 0.3) {
+      const damage = Math.floor(Math.random() * 50) + 10;
+      useRaidBossStore.getState().damageBoss(damage, message.username);
+    }
+  }
+
   return Math.random() < probability;
 }
 
@@ -241,7 +260,7 @@ export function shouldAILikeMessage(message: Message): boolean {
 export function generateAILikes(message: Message): { likes: number; likedBy: string[] } {
   // Get likers from user pool
   const activeCount = userPool.getActiveChattersCount();
-  
+
   if (activeCount === 0) {
     return { likes: 0, likedBy: [] };
   }
@@ -251,7 +270,7 @@ export function generateAILikes(message: Message): { likes: number; likedBy: str
     Math.floor(Math.random() * 5) + 2,
     activeCount
   );
-  
+
   const likers = userPool.getRandomLikers(likeCount, message.username);
 
   return {

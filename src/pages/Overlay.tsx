@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Zap } from "lucide-react";
 import { useHypeStore } from "@/lib/hypeManager";
+import RaidBossOverlay from "@/components/overlay/RaidBossOverlay";
 
 // This component will be loaded in a transparent window
 export default function Overlay() {
@@ -58,6 +59,7 @@ export default function Overlay() {
 
             {/* Floating Emotes Area (Full screen) */}
             <div className="fixed inset-0 pointer-events-none">
+                <RaidBossOverlay />
                 {/* Emotes will be rendered here */}
             </div>
         </div>

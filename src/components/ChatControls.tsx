@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Camera, Square, Play, Settings, ExternalLink, Trash2, Loader2, Download } from "lucide-react";
+import { Camera, Square, Play, Settings, ExternalLink, Trash2, Loader2, Download, Swords } from "lucide-react";
+import { useRaidBossStore } from "@/lib/raidBossStore";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { SettingsMenu } from "./SettingsMenu";
 import { useState } from "react";
@@ -141,6 +142,14 @@ export const ChatControls = ({
         disabled={isPopoutOpen}
         backgroundColor="hsl(var(--primary))"
         ariaLabel={isPopoutOpen ? "Popout window already open" : "Open popout window"}
+      />
+
+      <CyberExpandButton
+        icon={Swords}
+        text="Spawn Boss"
+        onClick={() => useRaidBossStore.getState().startRaid('Dragon', 1000)}
+        backgroundColor="#ef4444"
+        ariaLabel="Spawn Raid Boss"
       />
     </div>
   );
