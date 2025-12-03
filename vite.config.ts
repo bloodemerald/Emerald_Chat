@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => ({
             '@radix-ui/react-toast',
             '@radix-ui/react-tooltip',
           ],
-          'supabase-vendor': ['@supabase/supabase-js', '@tanstack/react-query'],
+          'query-vendor': ['@tanstack/react-query'],
         },
       },
     },

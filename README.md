@@ -7,92 +7,59 @@ A Twitch-style chat simulator that generates AI-powered chat messages based on y
 ## Features
 
 - 🎮 Real-time screen capture with compression
-- 🤖 AI-powered chat generation using Google Gemini
-- 👥 Multiple chat personalities (toxic, helpful, meme, backseat, hype, lurker, spammer, analyst)
+- 🤖 AI-powered chat generation using **local Ollama** (100% free, privacy-focused)
+- 👥 Multiple chat personalities (toxic, helpful, meme, backseat, hype, lurker, spammer, analyst, and more)
 - 💬 Moderator mode to interact with AI chat
 - 📊 Adjustable message frequency and personality settings
 - 🪟 Popout window for OBS/streaming software integration
-- 💾 Chat history export (TXT & JSON)
 - ⌨️ Keyboard shortcuts for quick control
+- 🎯 Channel points, bits, raids, predictions, and more engagement features
+- 🎲 Mini-games (Blackjack)
+- 🐉 Raid boss battles
 
 ## Technologies
 
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn-ui
 - **Desktop**: Tauri (Rust backend, native performance)
-- **Backend**: Supabase Edge Functions (Deno)
-- **AI**: Google Gemini 2.0 Flash (with vision support) + Local Ollama support
+- **AI**: Local Ollama (llava:7b for vision, llama3.2:3b for text)
+- **State Management**: Zustand
+- **Animations**: Framer Motion
 
 ## Setup Instructions
 
 ### 1. Prerequisites
 
 - Node.js & npm ([install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
-- Supabase account ([sign up](https://supabase.com))
-- Google AI API key ([get free key](https://aistudio.google.com/app/apikey))
+- Ollama ([install from ollama.ai](https://ollama.ai))
 
-### 2. Clone and Install
+### 2. Install Ollama Models
+
+```sh
+# Install Ollama from https://ollama.ai
+# Then pull the required models:
+
+# Vision model (for analyzing screenshots)
+ollama pull llava:7b
+
+# Text model (optional, for faster text-only generation)
+ollama pull llama3.2:3b
+
+# Start Ollama server
+ollama serve
+```
+
+### 3. Clone and Install
 
 ```sh
 # Clone the repository
 git clone <YOUR_GIT_URL>
-cd screen-chatter-ai
+cd Emerald_Chat
 
 # Install dependencies
 npm install
 ```
 
-### 3. Configure Environment Variables
-
-Create a `.env` file in the root directory from the example template:
-
-```sh
-# Copy the example file
-cp .env.example .env
-```
-
-Then edit `.env` with your Supabase credentials:
-
-```env
-VITE_SUPABASE_URL=https://your-project-id.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
-```
-
-You can find these values in your [Supabase Dashboard](https://app.supabase.com) under Settings → API.
-
-### 4. Set Up Google AI API Key in Supabase
-
-The Google AI API key must be set as a Supabase Edge Function secret:
-
-**Option 1: Using Supabase CLI (Recommended)**
-
-```sh
-# Install Supabase CLI if you haven't
-npm install -g supabase
-
-# Login to Supabase
-supabase login
-
-# Link your project
-supabase link --project-ref yunsheqekpywelmpzawz
-
-# Set the secret
-supabase secrets set GOOGLE_AI_API_KEY=your_google_ai_api_key_here
-```
-
-**Option 2: Using Supabase Dashboard**
-
-1. Go to your [Supabase Dashboard](https://app.supabase.com/project/yunsheqekpywelmpzawz)
-2. Navigate to **Edge Functions** → **Secrets**
-3. Add secret: `GOOGLE_AI_API_KEY` = `your_google_ai_api_key_here`
-
-### 5. Deploy Edge Function
-
-```sh
-# Deploy the generate-chat function
-supabase functions deploy generate-chat
-```
-
-### 6. Run Development Server
+### 4. Run Development Server
 
 ```sh
 npm run dev
@@ -102,11 +69,12 @@ The app will open at `http://localhost:8080`
 
 ## How to Use
 
-1. **Capture Screen**: Click "Capture Screen" or press `Ctrl+K` to capture your screen
-2. **Start Generation**: Click "Start" or press `Space` to begin generating chat messages
-3. **Customize Settings**: Click the gear icon or press `Ctrl+/` to adjust personalities and frequency
-4. **Moderator Mode**: Type in the input box to add your own messages that the AI will respond to
-5. **Popout Window**: Click the popout icon to open chat in a separate window for OBS integration
+1. **Start Ollama**: Make sure Ollama is running (`ollama serve`)
+2. **Capture Screen**: Click "Play" button to start screen capture
+3. **AI Chat Begins**: Chat messages will automatically generate based on what's on screen
+4. **Customize Settings**: Click the gear icon or press `Ctrl+/` to adjust personalities and frequency
+5. **Moderator Mode**: Type in the input box to add your own messages that the AI will respond to
+6. **Popout Window**: Click the popout icon to open chat in a separate window for OBS integration
 
 ## Keyboard Shortcuts
 
@@ -115,54 +83,65 @@ The app will open at `http://localhost:8080`
 - `Ctrl+/` - Toggle settings
 - `Ctrl+Shift+L` - Clear chat
 
-## Getting Your Google AI API Key
-
-1. Visit [Google AI Studio](https://aistudio.google.com/app/apikey)
-2. Sign in with your Google account
-3. Click "Get API Key" or "Create API Key"
-4. Copy the key and use it in the Supabase secrets setup
-
-**Note**: Google Gemini has a generous free tier, perfect for getting started!
-
 ## Project Structure
 
 ```
-screen-chatter-ai/
+Emerald_Chat/
 ├── src/
 │   ├── components/      # React components
 │   ├── hooks/          # Custom React hooks
 │   ├── lib/            # Utilities and constants
 │   ├── pages/          # Main application pages
-│   └── integrations/   # Supabase client
-├── supabase/
-│   └── functions/
-│       └── generate-chat/  # Edge function for AI generation
+│   └── types/          # TypeScript type definitions
+├── src-tauri/          # Tauri desktop app configuration
 └── public/             # Static assets
 ```
 
 ## Troubleshooting
 
 ### Chat not generating?
-- Check that `GOOGLE_AI_API_KEY` is set in Supabase secrets
-- Verify the edge function is deployed: `supabase functions list`
+- Check that Ollama is running: `ollama list` should show installed models
+- Verify llava:7b is installed: `ollama pull llava:7b`
 - Check browser console for error messages
+- Try using a smaller model if you have limited RAM (llava:7b instead of llava:13b)
 
 ### Screen capture not working?
 - Ensure you grant screen sharing permissions in your browser
 - Try using Chrome/Edge (best compatibility)
 
-### Rate limit errors?
-- Google Gemini free tier has rate limits
-- Increase message frequency in settings to reduce API calls
-- Consider upgrading to a paid plan for higher limits
+### Slow generation?
+- Use llava:7b instead of llava:13b for faster responses
+- Reduce message frequency in settings
+- Make sure no other heavy applications are running
 
-## Deployment
+### "Ollama timeout" errors?
+- Your GPU may not have enough VRAM for the model
+- Try a smaller model: `ollama pull llava:7b`
+- Close other applications to free up memory
+- Increase timeout in settings if needed
 
-To deploy this as a standalone web app:
+## Desktop App
 
-1. Deploy frontend to Vercel/Netlify/your hosting provider
-2. Ensure Supabase Edge Functions are deployed
-3. Update CORS settings if needed
+Build the desktop app with Tauri:
+
+```sh
+# Development
+npm run tauri:dev
+
+# Production build
+npm run tauri:build
+```
+
+## Performance Tips
+
+- **RTX 3070 or similar**: Use llava:7b for best balance of speed and quality
+- **RTX 4080+ or high-end GPU**: Can use llava:13b for better quality
+- **CPU-only or low VRAM**: Use llama3.2:3b (text-only, no vision)
+- Adjust message frequency in settings to control generation rate
+
+## Privacy
+
+All AI processing happens **locally on your machine**. No data is sent to external servers. Your screen captures and chat messages stay on your computer.
 
 ## License
 

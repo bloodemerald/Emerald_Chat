@@ -154,9 +154,12 @@ export function useChatSync(
   useEffect(() => {
     if (isPopout || !channelRef.current) return;
 
+    // Capture the current channel instance to ensure cleanup works correctly
+    const channel = channelRef.current;
+
     const handleSyncRequest = (event: MessageEvent<ChatSyncMessage>) => {
       if (event.data.type === "sync-state" && event.data.senderId !== windowIdRef.current) {
-        channelRef.current?.postMessage({
+        channel.postMessage({
           type: "sync-state",
           messages,
           senderId: windowIdRef.current,
@@ -164,10 +167,10 @@ export function useChatSync(
       }
     };
 
-    channelRef.current.addEventListener("message", handleSyncRequest);
+    channel.addEventListener("message", handleSyncRequest);
 
     return () => {
-      channelRef.current?.removeEventListener("message", handleSyncRequest);
+      channel.removeEventListener("message", handleSyncRequest);
     };
   }, [messages, isPopout]);
 

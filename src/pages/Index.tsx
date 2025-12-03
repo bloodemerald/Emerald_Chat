@@ -7,7 +7,7 @@ import { NoChatEmptyState } from "@/components/EmptyState";
 import { UserListPanel } from "@/components/UserListPanel";
 import { UserProfileModal } from "@/components/UserProfileModal";
 import { UserHistoryModal } from "@/components/UserHistoryModal";
-import { supabase } from "@/integrations/supabase/client";
+import { AIGeneratingIndicator } from "@/components/AIGeneratingIndicator";
 import { toast } from "sonner";
 import { Message, ChatSettings, PersonalityType } from "@/types/personality";
 import { selectPersonality, PERSONALITIES } from "@/lib/personalities";
@@ -16,6 +16,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { compressScreenshot } from "@/lib/imageUtils";
 import { saveMessages, loadMessages, clearMessages, saveSettings, loadSettings } from "@/lib/storage";
 import { RateLimiter } from "@/lib/debounce";
+import { logger } from "@/lib/logger";
 import {
   MESSAGE_FREQUENCY_DEFAULT,
   RECENT_MESSAGES_LIMIT,
@@ -123,32 +124,42 @@ const Index = () => {
   const retryCountRef = useRef(0);
   const isWaitingForAIRef = useRef(false);
   const animationRef = useRef<ChatAnimationRef>(null);
+  const isMountedRef = useRef(true);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Content detection patterns (defined outside callback to avoid recreation)
+  const keywordDetectors = useMemo(() => [
+    { keywords: ["vs code", "vscode", "visual studio code", "windsurf", "cursor"], label: "VS Code / coding workspace" },
+    { keywords: ["unreal", "unity"], label: "Game engine editor" },
+    { keywords: ["figma"], label: "Figma design canvas" },
+    { keywords: ["after effects", "premiere", "davinci"], label: "Video editing timeline" },
+    { keywords: ["valorant", "league", "lol", "apex", "overwatch", "csgo", "minecraft"], label: "Popular game on screen" },
+    { keywords: ["terminal", "shell", "powershell"], label: "Terminal / CLI" },
+  ], []);
+
+  const contentPatterns = useMemo(() => [
+    /\b(\w+(?:\s+\w+)?(?:\s+\d+)?)\s+(working|running|loading|crashed|failed|success|error|bug|fix|update|patch)\b/gi,
+    /\b(localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)\b/g,
+    /\b(\w+(?:\s+\w+)?)\s+(game|app|software|program|tool|utility)\b/gi,
+    /\b(visual\s+studio|vs\s+code|intellij|eclipse|notepad\+\+|sublime|atom|vim|emacs|cursor|windsurf)\b/gi,
+    /\b(chrome|firefox|safari|edge|browser|web\s+page|website|tab)\b/gi,
+    /\b(windows|mac|linux|ubuntu|terminal|command\s+line|shell|bash|powershell)\b/gi,
+    /\b(react|vue|angular|javascript|typescript|python|java|cpp|c\+\+|html|css|node|npm|next\.js)\b/gi,
+    /\b(league|valorant|csgo|minecraft|fortnite|apex|overwatch|dota|lol|wow|fifa|nba|nfl|elden\s+ring|tarkov)\b/gi,
+    /\blooks\s+like\s+(?:it's\s+)?([\w\s:+#.-]{3,40})/gi,
+    /\bthis\s+is\s+([\w\s:+#.-]{3,40})/gi,
+    /\bplaying\s+([\w\s:+#.-]{3,40})/gi,
+  ], []);
 
   // Extract content keywords from AI messages for context
   const extractContentFromMessages = useCallback((messages: Array<{ message: string; personality: PersonalityType }>): string => {
-    const keywordDetectors: Array<{ keywords: string[]; label: string }> = [
-      { keywords: ["vs code", "vscode", "visual studio code", "windsurf", "cursor"], label: "VS Code / coding workspace" },
-      { keywords: ["unreal", "unity"], label: "Game engine editor" },
-      { keywords: ["figma"], label: "Figma design canvas" },
-      { keywords: ["after effects", "premiere", "davinci"], label: "Video editing timeline" },
-      { keywords: ["valorant", "league", "lol", "apex", "overwatch", "csgo", "minecraft"], label: "Popular game on screen" },
-      { keywords: ["terminal", "shell", "powershell"], label: "Terminal / CLI" },
-    ];
-
-    // Look for game names, app names, or specific content identifiers
-    const contentPatterns = [
-      /\b(\w+(?:\s+\w+)?(?:\s+\d+)?)\s+(working|running|loading|crashed|failed|success|error|bug|fix|update|patch)\b/gi,
-      /\b(localhost:\d+|127\.0\.0\.1:\d+|0\.0\.0\.0:\d+)\b/g,
-      /\b(\w+(?:\s+\w+)?)\s+(game|app|software|program|tool|utility)\b/gi,
-      /\b(visual\s+studio|vs\s+code|intellij|eclipse|notepad\+\+|sublime|atom|vim|emacs|cursor|windsurf)\b/gi,
-      /\b(chrome|firefox|safari|edge|browser|web\s+page|website|tab)\b/gi,
-      /\b(windows|mac|linux|ubuntu|terminal|command\s+line|shell|bash|powershell)\b/gi,
-      /\b(react|vue|angular|javascript|typescript|python|java|cpp|c\+\+|html|css|node|npm|next\.js)\b/gi,
-      /\b(league|valorant|csgo|minecraft|fortnite|apex|overwatch|dota|lol|wow|fifa|nba|nfl|elden\s+ring|tarkov)\b/gi,
-      /\blooks\s+like\s+(?:it's\s+)?([\w\s:+#.-]{3,40})/gi,
-      /\bthis\s+is\s+([\w\s:+#.-]{3,40})/gi,
-      /\bplaying\s+([\w\s:+#.-]{3,40})/gi,
-    ];
 
     const stripFiller = (text: string) =>
       text
@@ -178,7 +189,7 @@ const Index = () => {
       }
     }
     return "";
-  }, []);
+  }, [keywordDetectors, contentPatterns]);
 
   // Keep message bit badges in sync with user balances (cheers & gifts)
   useEffect(() => {
@@ -327,6 +338,10 @@ const Index = () => {
     });
 
     // Start retroactive likes system (for older messages)
+    // NOTE: This replaces the entire likes/likedBy array. If concurrent updates
+    // from staggeredLikes or channelPoints happen, there's a theoretical race condition.
+    // In practice, these systems run at different intervals so collisions are rare.
+    // TODO: Consider implementing a single like update queue for better consistency.
     retroactiveLikes.start((messageId, likes, likedBy) => {
       setMessages((current) =>
         current.map((msg) =>
@@ -338,11 +353,13 @@ const Index = () => {
     });
 
     // Start staggered likes system (for new messages)
+    // This additively updates likes, checking for duplicates
     staggeredLikes.start((messageId, username) => {
       setMessages((current) =>
         current.map((msg) => {
           if (msg.id === messageId) {
             const currentLikedBy = msg.likedBy || [];
+            // Double-check username isn't already in the array to prevent duplicates
             if (!currentLikedBy.includes(username)) {
               return {
                 ...msg,
@@ -567,10 +584,24 @@ const Index = () => {
         video.onloadedmetadata = resolve;
       });
 
+      // Check if component is still mounted after async operation
+      if (!isMountedRef.current) return null;
+
       // Small delay to ensure frame is ready
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      // Check again after delay
+      if (!isMountedRef.current) return null;
+
       const dataUrl = await compressScreenshot(video);
+
+      // Cleanup video element
+      video.srcObject = null;
+      video.remove();
+
+      // Final check before returning
+      if (!isMountedRef.current) return null;
+
       return dataUrl;
     } catch (error) {
       console.error("Frame capture error:", error);
@@ -857,8 +888,10 @@ Rules:
       return;
     }
 
+    // Set flag immediately to prevent race condition
+    isWaitingForAIRef.current = true;
+
     try {
-      isWaitingForAIRef.current = true;
       await rateLimiterRef.current.execute(async () => {
         const personalitySettings = { ...settings.personalities };
 
@@ -961,35 +994,13 @@ Rules:
         }
 
         if (useCloud && !usedLocal) {
-          console.log("☁️ Using Cloud AI...");
-          try {
-            const geminiResponse = await supabase.functions.invoke("generate-chat-gemini", {
-              body: {
-                screenshot,
-                recentChat: recentMessages,
-                personalities: selectedPersonalities,
-                batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
-                additionalContext: combinedAdditionalContext,
-              },
-            });
-            data = geminiResponse.data;
-            error = geminiResponse.error;
-            if (!error) console.log("✅ Using Google Gemini API (Cloud)");
-          } catch (geminiError) {
-            console.warn("⚠️ Google Gemini failed, trying OpenRouter fallback:", geminiError);
-            const openRouterResponse = await supabase.functions.invoke("generate-chat", {
-              body: {
-                screenshot,
-                recentChat: recentMessages,
-                personalities: selectedPersonalities,
-                batchSize: shouldBurst ? AI_BATCH_SIZE + 2 : AI_BATCH_SIZE,
-                additionalContext: combinedAdditionalContext,
-              },
-            });
-            data = openRouterResponse.data;
-            error = openRouterResponse.error;
-            if (!error) console.log("✅ Using OpenRouter fallback");
-          }
+          // Cloud AI has been removed - only local Ollama is supported
+          console.error("❌ Cloud AI is no longer supported. Please use local Ollama.");
+          toast.error("Cloud AI removed", {
+            description: "Please install and run Ollama locally for AI chat generation.",
+            duration: 10000
+          });
+          error = new Error("Cloud AI is no longer supported. Use local Ollama instead.");
         }
 
         if (error) throw error;
@@ -1276,10 +1287,18 @@ Rules:
     });
   };
 
-  // Clear chat
+  // Clear chat with confirmation
   const handleClearChat = () => {
-    handleClearMessages();
-    broadcastClear();
+    if (messages.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to clear all ${messages.length} messages? This action cannot be undone.`
+    );
+
+    if (confirmed) {
+      handleClearMessages();
+      broadcastClear();
+    }
   };
 
   // Export functionality removed - not currently used
@@ -1345,7 +1364,7 @@ Rules:
   useEffect(() => {
     return () => {
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current);
       }
       if (captureIntervalRef.current) {
         clearInterval(captureIntervalRef.current);
@@ -1393,6 +1412,14 @@ Rules:
 
   // Memoize whether to show empty state
   const showEmptyState = useMemo(() => messages.length === 0, [messages.length]);
+
+  // Memoize the message with most likes (for visual highlighting)
+  const mostLikedMessage = useMemo(() => {
+    if (messages.length === 0) return null;
+    return messages.reduce((max, msg) =>
+      (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
+    , messages[0]);
+  }, [messages]);
 
   return (
     <div
@@ -1464,16 +1491,13 @@ Rules:
               </div>
             )}
 
+            {/* AI Generating Indicator */}
+            <AIGeneratingIndicator isVisible={isGenerating && messages.length === 0 && isWaitingForAIRef.current} />
+
             {showEmptyState ? (
               <NoChatEmptyState />
             ) : (
-              (() => {
-                // Find the message with the most likes for bubble effect
-                const mostLikedMessage = messages.reduce((max, msg) =>
-                  (msg.likes ?? 0) > (max.likes ?? 0) ? msg : max
-                  , messages[0]);
-
-                return messages.map((msg) => (
+              messages.map((msg) => (
                   <div key={msg.id} id={`message-${msg.id}`} className="transition-colors duration-300">
                     <ChatPersonality
                       message={msg}
@@ -1495,8 +1519,7 @@ Rules:
                       onViewProfile={handleViewProfile}
                     />
                   </div>
-                ));
-              })()
+                ))
             )}
           </div>
 

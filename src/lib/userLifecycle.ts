@@ -41,14 +41,14 @@ export class UserLifecycleManager {
    * Stop the user lifecycle simulation
    */
   stop() {
-    if (this.joinInterval) clearInterval(this.joinInterval);
-    if (this.leaveInterval) clearInterval(this.leaveInterval);
-    if (this.activationInterval) clearInterval(this.activationInterval);
-    
+    if (this.joinInterval) clearTimeout(this.joinInterval);
+    if (this.leaveInterval) clearTimeout(this.leaveInterval);
+    if (this.activationInterval) clearTimeout(this.activationInterval);
+
     this.joinInterval = null;
     this.leaveInterval = null;
     this.activationInterval = null;
-    
+
     console.log('🛑 User lifecycle stopped');
   }
   

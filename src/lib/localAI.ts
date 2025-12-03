@@ -99,6 +99,7 @@ export async function generateWithOllama({
   ollamaApiUrl,
   batchSize = 3,
   additionalContext,
+  recursionDepth = 0,
 }: {
   screenshot: string;
   recentChat: string[];
@@ -107,6 +108,7 @@ export async function generateWithOllama({
   ollamaApiUrl?: string;
   batchSize?: number;
   additionalContext?: string;
+  recursionDepth?: number;
 }): Promise<{
   messages: Array<{ message: string; personality: PersonalityType }>;
   detectedContent?: string;
@@ -228,7 +230,7 @@ Write ${batchSize} SHORT messages now:`;
 
     // Check for Tool Calls (MCP Lite)
     const toolCall = lines.find((line: string) => line.startsWith("TOOL:SEARCH:"));
-    if (toolCall) {
+    if (toolCall && recursionDepth < 2) {
       console.log("🛠️ Tool Call Detected:", toolCall);
       const query = toolCall.replace("TOOL:SEARCH:", "").trim();
 
@@ -240,8 +242,7 @@ Write ${batchSize} SHORT messages now:`;
         console.log("🔍 Search Results found, re-generating with context...");
         const contextString = searchResults.map(r => `- ${r.title}: ${r.snippet}`).join("\n");
 
-        // Recursive call with added context
-        // We remove the tool call instruction to prevent infinite loops
+        // Recursive call with added context and incremented depth
         return generateWithOllama({
           screenshot,
           recentChat,
@@ -249,9 +250,12 @@ Write ${batchSize} SHORT messages now:`;
           model,
           ollamaApiUrl,
           batchSize,
-          additionalContext: `\n\nSEARCH RESULTS FOR "${query}":\n${contextString}\n\nUse this info to write smarter messages.`
+          additionalContext: `\n\nSEARCH RESULTS FOR "${query}":\n${contextString}\n\nUse this info to write smarter messages.`,
+          recursionDepth: recursionDepth + 1,
         });
       }
+    } else if (toolCall && recursionDepth >= 2) {
+      console.warn("⚠️ Max recursion depth reached, ignoring tool call to prevent infinite loop");
     }
 
     const messages = lines
