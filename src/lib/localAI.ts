@@ -287,7 +287,7 @@ Write ${batchSize} SHORT messages now:`;
  * Compare two screenshots and describe what changed between them using vision AI
  */
 export async function compareScreenshots({
-  previousScreenshot: _previousScreenshot,
+  previousScreenshot,
   currentScreenshot,
   model = "llava:13b",
   ollamaApiUrl,
@@ -301,6 +301,11 @@ export async function compareScreenshots({
     const baseUrl = getOllamaBaseUrl(ollamaApiUrl);
 
     // Extract base64 data
+    let base64Previous = previousScreenshot;
+    if (previousScreenshot.includes('base64,')) {
+      base64Previous = previousScreenshot.split('base64,')[1];
+    }
+
     let base64Current = currentScreenshot;
     if (currentScreenshot.includes('base64,')) {
       base64Current = currentScreenshot.split('base64,')[1];
@@ -333,9 +338,7 @@ EXAMPLES OF BAD OUTPUTS:
 
 What changed between these two screenshots?`;
 
-    // We'll send the current screenshot with both images in context
-    // Note: Ollama's vision models work better with a single image + text context
-    // For actual comparison, we'll use a workaround by describing both
+    // Send both screenshots so the model can compare frame-to-frame changes directly
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: "POST",
       headers: {
@@ -343,8 +346,8 @@ What changed between these two screenshots?`;
       },
       body: JSON.stringify({
         model: model || "llava:13b",
-        prompt: comparisonPrompt + "\n\nCurrent screenshot:",
-        images: [base64Current],
+        prompt: comparisonPrompt + "\n\nImage 1: previous screenshot.\nImage 2: current screenshot.\nDescribe only what changed from Image 1 to Image 2.",
+        images: [base64Previous, base64Current],
         stream: false,
         options: {
           temperature: 0.3, // Lower temperature for more consistent detection

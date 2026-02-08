@@ -232,8 +232,11 @@ function analyzeEmotes(message: string): number {
   }
 
   // Emoji sentiment (basic)
-  const positiveEmojis = message.match(/[😊😄😃😀🙂😍🥰😻💕❤️🔥💯✨🎉👏🙌]/g);
-  const negativeEmojis = message.match(/[😢😭😞😔😟😠😡💀☠️👎]/g);
+  const positiveEmojiRegex = /(?:😊|😄|😃|😀|🙂|😍|🥰|😻|💕|❤️|🔥|💯|✨|🎉|👏|🙌)/gu;
+  const negativeEmojiRegex = /(?:😢|😭|😞|😔|😟|😠|😡|💀|☠️|👎)/gu;
+
+  const positiveEmojis = message.match(positiveEmojiRegex);
+  const negativeEmojis = message.match(negativeEmojiRegex);
 
   if (positiveEmojis) {
     emoteScore += positiveEmojis.length * 0.5;
