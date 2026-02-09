@@ -82,7 +82,7 @@ export const ChatPersonality = memo(({
   let effectClasses = '';
   let messageStyle: React.CSSProperties = {};
   let usernameStyle: React.CSSProperties = { color: message.color };
-  let displayPersonality = personality;
+  const displayPersonality = personality;
   
   if (isEffectActive && message.redemptionEffect) {
     switch (message.redemptionEffect.type) {
@@ -188,7 +188,7 @@ export const ChatPersonality = memo(({
               <span 
                 className="text-[10px] px-1.5 py-0.5 text-white rounded font-bold animate-pulse"
                 style={{ 
-                  backgroundColor: (message as any).cheerTier?.badgeColor || '#9147ff',
+                  backgroundColor: message.cheerTier?.badgeColor || '#9147ff',
                   boxShadow: '0 0 8px rgba(145, 71, 255, 0.5)'
                 }}
                 title={`Cheered ${message.bits} bits`}

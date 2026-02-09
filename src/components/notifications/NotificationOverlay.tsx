@@ -156,23 +156,23 @@ export function NotificationOverlay({ maxVisible = 5, side = 'right' }: Notifica
 
   // Expose method to add notifications globally
   useEffect(() => {
-    // @ts-ignore - Global notification queue
+    // @ts-expect-error - window.addNotification is attached dynamically at runtime
     window.addNotification = addNotification;
 
     return () => {
-      // @ts-ignore
+      // @ts-expect-error - window.addNotification is attached dynamically at runtime
       delete window.addNotification;
     };
   }, []);
 
   useEffect(() => {
-    // @ts-ignore
+    // @ts-expect-error - window.showRaidCelebration is attached dynamically at runtime
     window.showRaidCelebration = (payload: RaidCelebrationPayload) => {
       setRaidCelebration(payload);
     };
 
     return () => {
-      // @ts-ignore
+      // @ts-expect-error - window.showRaidCelebration is attached dynamically at runtime
       delete window.showRaidCelebration;
     };
   }, []);
@@ -208,7 +208,7 @@ export function notifyBitGift(gift: BitGift) {
     data: gift,
     timestamp: gift.timestamp,
   };
-  // @ts-ignore
+  // @ts-expect-error - global notification function may be initialized by the overlay later
   window.addNotification?.(notification);
 }
 
@@ -218,7 +218,7 @@ export function notifyRaidCelebration(size: number) {
     size,
     timestamp: Date.now(),
   };
-  // @ts-ignore
+  // @ts-expect-error - global celebration function may be initialized by the overlay later
   window.showRaidCelebration?.(payload);
 }
 
@@ -287,7 +287,7 @@ export function notifyBitCheer(cheer: BitCheer) {
     data: cheer,
     timestamp: cheer.timestamp,
   };
-  // @ts-ignore
+  // @ts-expect-error - global notification function may be initialized by the overlay later
   window.addNotification?.(notification);
 }
 
@@ -298,7 +298,7 @@ export function notifySubscription(event: SubEvent) {
     data: event,
     timestamp: event.timestamp,
   };
-  // @ts-ignore
+  // @ts-expect-error - global notification function may be initialized by the overlay later
   window.addNotification?.(notification);
 }
 
@@ -309,6 +309,6 @@ export function notifyChannelPoints(effect: RedemptionEffect) {
     data: effect,
     timestamp: Date.now(),
   };
-  // @ts-ignore
+  // @ts-expect-error - global notification function may be initialized by the overlay later
   window.addNotification?.(notification);
 }
