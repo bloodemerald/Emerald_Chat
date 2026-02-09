@@ -61,7 +61,7 @@ export interface Message {
     targetUser?: string;
     targetMessage?: string;
     duration?: number;
-    data?: any;
+    data?: Record<string, unknown>;
   };
   effectExpiry?: number; // Timestamp when effect expires
   // Reply/Threading

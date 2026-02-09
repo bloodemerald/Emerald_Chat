@@ -14,7 +14,7 @@ interface FloatingText {
     scale: number;
 }
 
-export const ChatAnimations = forwardRef<ChatAnimationRef, {}>((props, ref) => {
+export const ChatAnimations = forwardRef<ChatAnimationRef, Record<string, never>>((_props, ref) => {
     const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
 
     const addFloatingText = useCallback((text: string, type: 'normal' | 'hype' | 'combo' | 'sub' = 'normal') => {

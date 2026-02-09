@@ -11,7 +11,9 @@ const Login = () => {
     // Store a fake session so we could reuse later if needed
     try {
       window.localStorage.setItem("emerald-chat-email", email || "guest@emerald.chat");
-    } catch {}
+    } catch (error) {
+      console.warn("Unable to access localStorage during login", error);
+    }
     navigate("/chat");
   };
 

@@ -620,7 +620,7 @@ const Index = () => {
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
         audio: false,
-      } as any);
+      } as DisplayMediaStreamOptions);
 
       // Store the stream for continuous captures
       setMediaStream(stream);

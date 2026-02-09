@@ -29,7 +29,7 @@ export interface RedemptionEffect {
   targetUser?: string;
   targetMessage?: string;
   duration?: number; // milliseconds
-  data?: any;
+  data?: Record<string, unknown>;
 }
 
 /**

@@ -21,7 +21,7 @@ export const useHypeStore = create<HypeState>((set, get) => ({
         // Calculate new percentage
         let newPercent = percent + amount;
         let newLevel = level;
-        let newCombo = combo + 1;
+        const newCombo = combo + 1;
 
         // Level up logic
         if (newPercent >= 100) {
