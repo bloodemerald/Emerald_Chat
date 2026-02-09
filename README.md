@@ -29,7 +29,8 @@ A Twitch-style chat simulator that generates AI-powered chat messages based on y
 
 ### 1. Prerequisites
 
-- Node.js & npm ([install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+- Node.js **22.16.0** and npm **10.9.2** (`nvm use` reads `.nvmrc`)
+- Bun **1.2.20** (`bun --version` should match `.bun-version`)
 - Ollama ([install from ollama.ai](https://ollama.ai))
 
 ### 2. Install Ollama Models
@@ -56,7 +57,7 @@ git clone <YOUR_GIT_URL>
 cd Emerald_Chat
 
 # Install dependencies
-npm install
+npm ci
 ```
 
 ### 4. Run Development Server

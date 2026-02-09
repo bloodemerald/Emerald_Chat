@@ -13,8 +13,8 @@ A practical backlog you can work through in phases.
 - [ ] Audit and update npm packages to latest stable versions (`npm outdated` + selective upgrades).
 - [ ] Upgrade Tauri + Rust crates and re-test desktop packaging across OS targets.
 - [ ] Remove unused dependencies and dead imports to reduce bundle size.
-- [ ] Enforce a locked Node/Bun version in repo docs and CI for consistent builds.
-- [ ] Add Dependabot (or Renovate) for automated update PRs.
+- [x] Enforce a locked Node/Bun version in repo docs and CI for consistent builds.
+- [x] Add Dependabot (or Renovate) for automated update PRs.
 
 ## 3) Quality and testing improvements
 - [ ] Add unit tests for core message parsing, sentiment logic, and utility functions.
