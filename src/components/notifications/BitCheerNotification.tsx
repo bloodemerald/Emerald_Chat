@@ -1,5 +1,5 @@
 import { BitCheer } from '@/lib/bitCheering';
-import { useEffect, useState } from 'react';
+import { useTimedNotification } from './useTimedNotification';
 
 interface BitCheerNotificationProps {
   cheer: BitCheer;
@@ -9,31 +9,10 @@ interface BitCheerNotificationProps {
 const PIXEL_DROPS = ['💰', '💎', '🔮', '🍬'];
 
 export function BitCheerNotification({ cheer, onComplete }: BitCheerNotificationProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    // Slide in
-    setTimeout(() => setIsVisible(true), 50);
-
-    // Auto dismiss after 5-7 seconds (longer for bigger cheers)
-    const duration = cheer.amount >= 1000 ? 7000 : 5000;
-    const dismissTimer = setTimeout(() => {
-      handleDismiss();
-    }, duration);
-
-    return () => {
-      clearTimeout(dismissTimer);
-    };
-  }, [cheer]);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onComplete?.();
-    }, 300);
-  };
+  const { isVisible, isExiting, dismiss } = useTimedNotification({
+    autoDismissMs: cheer.amount >= 1000 ? 7000 : 5000,
+    onComplete,
+  });
 
   const { tier } = cheer;
   const isWhale = cheer.amount >= 5000;
@@ -53,7 +32,7 @@ export function BitCheerNotification({ cheer, onComplete }: BitCheerNotification
         boxShadow: '0 0 0 4px #0b1021, inset 0 0 0 3px rgba(255,255,255,0.08)',
         imageRendering: 'pixelated'
       }}
-      onClick={handleDismiss}
+      onClick={dismiss}
       role="alert"
       aria-live="polite"
     >
