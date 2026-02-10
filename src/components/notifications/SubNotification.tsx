@@ -1,5 +1,5 @@
 import { SubEvent, SUB_TIERS } from '@/lib/subscriptions';
-import { useEffect, useState } from 'react';
+import { useTimedNotification } from './useTimedNotification';
 
 interface SubNotificationProps {
   event: SubEvent;
@@ -9,31 +9,10 @@ interface SubNotificationProps {
 const SUB_DROPS = ['🍄', '📜', '⭐', '🍯'];
 
 export function SubNotification({ event, onComplete }: SubNotificationProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    // Slide in
-    setTimeout(() => setIsVisible(true), 50);
-
-    // Auto dismiss after 6-8 seconds (longer for milestones)
-    const duration = event.milestone || event.type === 'sub_train' ? 8000 : 6000;
-    const dismissTimer = setTimeout(() => {
-      handleDismiss();
-    }, duration);
-
-    return () => {
-      clearTimeout(dismissTimer);
-    };
-  }, [event]);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onComplete?.();
-    }, 300);
-  };
+  const { isVisible, isExiting, dismiss } = useTimedNotification({
+    autoDismissMs: event.milestone || event.type === 'sub_train' ? 8000 : 6000,
+    onComplete,
+  });
 
   const tierConfig = SUB_TIERS[event.tier];
 
@@ -137,7 +116,7 @@ export function SubNotification({ event, onComplete }: SubNotificationProps) {
         cursor-pointer hover:scale-[1.02]
         relative overflow-hidden
       `}
-      onClick={handleDismiss}
+      onClick={dismiss}
       role="alert"
       aria-live="polite"
       style={{

@@ -1,5 +1,5 @@
 import { RedemptionEffect } from '@/lib/channelPoints';
-import { useEffect, useState } from 'react';
+import { useTimedNotification } from './useTimedNotification';
 
 interface ChannelPointsNotificationProps {
   effect: RedemptionEffect;
@@ -7,30 +7,10 @@ interface ChannelPointsNotificationProps {
 }
 
 export function ChannelPointsNotification({ effect, onComplete }: ChannelPointsNotificationProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    // Slide in
-    setTimeout(() => setIsVisible(true), 50);
-
-    // Auto dismiss after 5 seconds
-    const dismissTimer = setTimeout(() => {
-      handleDismiss();
-    }, 5000);
-
-    return () => {
-      clearTimeout(dismissTimer);
-    };
-  }, []);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onComplete?.();
-    }, 300);
-  };
+  const { isVisible, isExiting, dismiss } = useTimedNotification({
+    autoDismissMs: 5000,
+    onComplete,
+  });
 
   const getRedemptionInfo = () => {
     switch (effect.type) {
@@ -100,7 +80,7 @@ export function ChannelPointsNotification({ effect, onComplete }: ChannelPointsN
         border-2 border-white/30
         relative
       `}
-      onClick={handleDismiss}
+      onClick={dismiss}
       role="alert"
       aria-live="polite"
     >

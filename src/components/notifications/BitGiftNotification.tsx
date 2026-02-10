@@ -1,5 +1,5 @@
 import { BitGift } from '@/lib/bitGifting';
-import { useEffect, useState } from 'react';
+import { useTimedNotification } from './useTimedNotification';
 
 interface BitGiftNotificationProps {
   gift: BitGift;
@@ -9,30 +9,10 @@ interface BitGiftNotificationProps {
 const GIFT_DROPS = ['🎁', '🧧', '💰', '🍭'];
 
 export function BitGiftNotification({ gift, onComplete }: BitGiftNotificationProps) {
-  const [isVisible, setIsVisible] = useState(false);
-  const [isExiting, setIsExiting] = useState(false);
-
-  useEffect(() => {
-    // Slide in
-    setTimeout(() => setIsVisible(true), 50);
-
-    // Auto dismiss after 6 seconds
-    const dismissTimer = setTimeout(() => {
-      handleDismiss();
-    }, 6000);
-
-    return () => {
-      clearTimeout(dismissTimer);
-    };
-  }, []);
-
-  const handleDismiss = () => {
-    setIsExiting(true);
-    setTimeout(() => {
-      setIsVisible(false);
-      onComplete?.();
-    }, 300);
-  };
+  const { isVisible, isExiting, dismiss } = useTimedNotification({
+    autoDismissMs: 6000,
+    onComplete,
+  });
 
   const getReasonText = (reason?: BitGift['reason']) => {
     switch (reason) {
@@ -64,7 +44,7 @@ export function BitGiftNotification({ gift, onComplete }: BitGiftNotificationPro
         boxShadow: '0 0 0 4px #1a0f24, inset 0 0 0 3px rgba(255,255,255,0.08)',
         imageRendering: 'pixelated'
       }}
-      onClick={handleDismiss}
+      onClick={dismiss}
       role="alert"
       aria-live="polite"
     >
