@@ -17,7 +17,7 @@ A practical backlog you can work through in phases.
 - [x] Add Dependabot (or Renovate) for automated update PRs.
 
 ## 3) Quality and testing improvements
-- [ ] Add unit tests for core message parsing, sentiment logic, and utility functions.
+- [x] Add unit tests for core message parsing, sentiment logic, and utility functions.
 - [ ] Add integration tests for chat event pipelines and state updates.
 - [ ] Add end-to-end smoke tests (launch app, connect, simulate chat, verify UI updates).
 - [ ] Add lint + typecheck + test as required CI checks for PR merge.
