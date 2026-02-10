@@ -781,6 +781,16 @@ const Index = () => {
 
   // Test messages removed - using AI only
 
+  // Local fallback message generator (works without LLM/screen capture)
+  const generateFallbackMessage = useCallback((personality: PersonalityType): string => {
+    const personalityData = PERSONALITIES[personality];
+    const phrase = personalityData.signaturePhrases[Math.floor(Math.random() * personalityData.signaturePhrases.length)];
+    const emote = personalityData.emotes[Math.floor(Math.random() * personalityData.emotes.length)];
+
+    // Keep it lightweight and Twitch-like
+    return Math.random() < 0.35 ? `${phrase} ${emote}` : phrase;
+  }, []);
+
   // Generate contextual message when screen issues occur
   const generateContextualMessage = useCallback(async (context: 'no_screen' | 'stream_ended', personality: PersonalityType): Promise<string> => {
     const examples = {
@@ -849,28 +859,30 @@ Rules:
     console.log("🎬 generateChatMessageBatch called", { hasScreenshot: !!screenshot, queueLength: messageQueueRef.current.length });
 
     if (!screenshot) {
-      console.log("⚠️ No screenshot available, generating contextual message");
-      // Generate contextual message about screen issues
-      const message = await generateContextualMessage('no_screen', 'helpful');
-      const helpfulUser = getOrCreateChatUser('helpful');
+      console.log("⚠️ No screenshot available, using fallback non-LLM messages");
+
+      const personality = selectPersonality(settings.personalities);
+      const fallbackUser = getOrCreateChatUser(personality);
+      const message = generateFallbackMessage(personality);
+
       const newMessage: Message = {
         id: `${Date.now()}-${Math.random()}`,
-        username: helpfulUser.username,
-        color: PERSONALITIES.helpful.color,
+        username: fallbackUser.username,
+        color: PERSONALITIES[personality].color,
         message,
         timestamp: new Date().toLocaleTimeString("en-US", {
           hour: "2-digit",
           minute: "2-digit",
         }),
-        personality: 'helpful',
+        personality,
         likes: 0,
         likedBy: [],
-        badges: helpfulUser.badges,
-        subscriberMonths: helpfulUser.subscriberMonths,
-        bits: helpfulUser.bits,
+        badges: fallbackUser.badges,
+        subscriberMonths: fallbackUser.subscriberMonths,
+        bits: fallbackUser.bits,
       };
 
-      console.log("💬 Adding no-screen message:", newMessage.message);
+      console.log("💬 Adding fallback message:", newMessage.message);
       setMessages((prev) => [...prev, newMessage]);
       broadcastMessage(newMessage);
       return;
@@ -1095,7 +1107,7 @@ Rules:
       console.warn("⚠️ Skipping this batch after failures, will try again on next cycle");
       toast.warning("Skipped failed batch", { description: "Will retry with next scheduled message. Check Ollama/API setup.", duration: 5000 });
     }
-  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode, detectedContent]);
+  }, [screenshot, settings, messages, broadcastMessage, displayNextQueuedMessage, isLofiMode, detectedContent, extractContentFromMessages, generateFallbackMessage]);
 
   // Start generating messages with dynamic timing
   const startGenerating = async () => {
@@ -1118,14 +1130,15 @@ Rules:
       return;
     }
 
-    // Auto-capture if no screenshot exists
+    // Attempt auto-capture if no screenshot exists (fallback still works without it)
     if (!screenshot || !mediaStream) {
       console.log("📸 No screenshot/stream, capturing...");
       const captured = await captureScreen();
       if (!captured) {
-        console.error("❌ Screen capture failed");
-        toast.error('Screen capture required to start AI chat');
-        return;
+        console.warn("⚠️ Screen capture failed, continuing in default chat mode");
+        toast.warning("Screen capture unavailable", {
+          description: "Starting default chat mode without AI vision.",
+        });
       }
     }
 
@@ -1187,36 +1200,13 @@ Rules:
       stopStreaming();
       toast.info("🛑 Streaming stopped and capture cleared");
     } else {
-      const dataUrl = await captureScreen();
-      if (dataUrl) {
-        toast.success("🎥 Screen captured! Starting generation...");
-      }
+      await startGenerating();
     }
   };
 
   const toggleLofiMode = useCallback(() => {
     setIsLofiMode((prev) => !prev);
   }, []);
-
-  // Auto-start generation when screenshot is captured via Play button (ONLY on initial capture)
-  const hasStartedRef = useRef(false);
-
-  useEffect(() => {
-    if (screenshot && !isGenerating && !isCapturing && !hasStartedRef.current) {
-      hasStartedRef.current = true;
-      // Small delay to ensure state is settled
-      const timer = setTimeout(() => {
-        startGenerating();
-      }, 300);
-
-      return () => clearTimeout(timer);
-    }
-
-    // Reset flag when screenshot is cleared
-    if (!screenshot) {
-      hasStartedRef.current = false;
-    }
-  }, [screenshot, isGenerating, isCapturing]);
 
   // Reply handlers
   const handleReply = useCallback((messageId: string, username: string, message: string) => {
@@ -1390,7 +1380,7 @@ Rules:
       action: () => {
         if (isGenerating) {
           stopGenerating();
-        } else if (screenshot) {
+        } else {
           startGenerating();
         }
       },
